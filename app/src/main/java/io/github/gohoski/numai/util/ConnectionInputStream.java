@@ -1,19 +1,14 @@
-package io.github.gohoski.numai;
-
-/**
- * Created by Gleb on 23.08.2025.
- * InputStream that automatically closes the connection
- */
+package io.github.gohoski.numai.util;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 
-class ConnectionInputStream extends InputStream {
+public class ConnectionInputStream extends InputStream {
     private final InputStream inputStream;
     private final HttpURLConnection connection;
 
-    ConnectionInputStream(InputStream inputStream, HttpURLConnection connection) {
+    public ConnectionInputStream(InputStream inputStream, HttpURLConnection connection) {
         this.inputStream = inputStream;
         this.connection = connection;
     }

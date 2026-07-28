@@ -1,4 +1,4 @@
-package io.github.gohoski.numai;
+package io.github.gohoski.numai.api;
 
 import android.content.Context;
 import android.os.Handler;
@@ -11,30 +11,29 @@ import java.util.List;
 import cc.nnproject.json.JSON;
 import cc.nnproject.json.JSONArray;
 import cc.nnproject.json.JSONObject;
+import io.github.gohoski.numai.R;
+import io.github.gohoski.numai.data.ConfigManager;
+import io.github.gohoski.numai.model.Message;
 
-/**
- * Created by Gleb on 21.08.2025.
- * бля как же мне лень эту залупу кодить
- */
-class ApiService {
+public class ApiService {
     private final ApiClient apiClient;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final ConfigManager config;
     private Context ctx;
 
-    ApiService(Context context) {
+    public ApiService(Context context) {
         this.apiClient = new ApiClient(context);
         this.config = ConfigManager.getInstance(context);
         ctx = context;
     }
 
-    void chatCompletion(final List<Message> msg, final boolean thinking, final ApiCallback<ApiResult> callback) {
+    public void chatCompletion(final List<Message> msg, final boolean thinking, final ApiCallback<ApiResult> callback) {
         System.out.println("chatCompletion...");
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    ApiRequest request = new ApiRequest("/chat/completions?include_think=true", "POST");
+                    ApiRequest request = new ApiRequest("/chat/completions", "POST");
                     JSONArray messages = new JSONArray();
                     String systemStr = config.getConfig().getSystemPrompt();
                     if (systemStr.length() != 0) {
@@ -44,7 +43,6 @@ class ApiService {
                         messages.add(system);
                     }
                     boolean hasImg = false;
-                    //convert all messages to json
                     for (Message message : msg) {
                         JSONObject messageJson = new JSONObject();
                         messageJson.put("role", message.getRole());
@@ -76,9 +74,6 @@ class ApiService {
                     body.put("messages", messages);
                     body.put("stream", true);
                     if (thinking) {
-                        //apparently the OpenAI Chat Completions API format still doesn't have proper reasoning support.
-                        // I would've used Responses API if possible, but very few platforms support it.
-                        // Flags are different on each API so this needs to be constantly changed in the future...
                         switch (config.getConfig().getBaseUrl()) {
                             case "https://openrouter.ai/api/v1":
                                 JSONObject reasoning = new JSONObject();
@@ -116,14 +111,14 @@ class ApiService {
         }).start();
     }
 
-    void getModels(final ApiCallback<ArrayList<String>> callback) {
+    public void getModels(final ApiCallback<ArrayList<String>> callback) {
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
                     ApiRequest request = new ApiRequest("/models", "GET");
                     String response = apiClient.executeAsString(request);
-                    ArrayList<String> models = new ArrayList<>();
+                    ArrayList<String> models = new ArrayList<String>();
 
                     JSONObject resp = JSON.getObject(response);
                     if (resp.has("error"))

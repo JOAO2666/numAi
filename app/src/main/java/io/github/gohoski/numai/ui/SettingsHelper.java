@@ -1,4 +1,4 @@
-package io.github.gohoski.numai;
+package io.github.gohoski.numai.ui;
 
 import android.app.AlertDialog;
 import android.content.Context;
@@ -17,13 +17,13 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Created by Gleb on 11.11.2025.
- * Helper class to not duplicate code.
- */
+import io.github.gohoski.numai.R;
+import io.github.gohoski.numai.api.ApiManager;
+import io.github.gohoski.numai.data.ConfigManager;
+import io.github.gohoski.numai.model.Config;
 
-class SettingsHelper {
-    static void setupApiSpinner(
+public class SettingsHelper {
+    public static void setupApiSpinner(
             final Context context,
             final Spinner spinner,
             final ConfigManager config,
@@ -108,7 +108,7 @@ class SettingsHelper {
                 .show();
     }
 
-    interface ApiSelectionCallback {
+    public interface ApiSelectionCallback {
         void onApiSelected(String api);
     }
 

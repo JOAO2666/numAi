@@ -31,11 +31,15 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Scanner;
 
-/**
- * Created by Gleb on 27.09.2025.
- *
- * First-time setup for the API key, which contains a user-friendly guide.
- */
+import io.github.gohoski.numai.api.ApiCallback;
+import io.github.gohoski.numai.api.ApiError;
+import io.github.gohoski.numai.api.ApiManager;
+import io.github.gohoski.numai.api.ApiService;
+import io.github.gohoski.numai.data.ConfigManager;
+import io.github.gohoski.numai.ui.Loading;
+import io.github.gohoski.numai.ui.SettingsHelper;
+import io.github.gohoski.numai.util.ModelSelector;
+import io.github.gohoski.numai.util.SSLDisabler;
 
 public class FirstTimeActivity extends Activity {
     private ViewFlipper viewFlipper;
@@ -58,18 +62,17 @@ public class FirstTimeActivity extends Activity {
 
         viewFlipper = (ViewFlipper) findViewById(R.id.view_flipper);
         setupNavigation();
-        runScreenSpecificCode(); // Initialize first screen
+        runScreenSpecificCode();
     }
 
     private void setupNavigation() {
-        // Screen 1 (index 0)
         View screen1 = viewFlipper.getChildAt(0);
         Button skipButton = (Button) screen1.findViewById(R.id.skip);
         Button nextButton1 = (Button) screen1.findViewById(R.id.next);
 
         skipButton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                forceShowScreen(2); //go to API key entering
+                forceShowScreen(2);
             }
         });
 
@@ -79,7 +82,6 @@ public class FirstTimeActivity extends Activity {
             }
         });
 
-        // Screen 2 (index 1)
         View screen2 = viewFlipper.getChildAt(1);
         Button backButton2 = (Button) screen2.findViewById(R.id.back);
         Button nextButton2 = (Button) screen2.findViewById(R.id.next);
@@ -96,7 +98,6 @@ public class FirstTimeActivity extends Activity {
         });
 
 
-        // Screen 3 (index 2)
         View screen3 = viewFlipper.getChildAt(2);
         Button backButton3 = (Button) screen3.findViewById(R.id.back);
         Button nextButton3 = (Button) screen3.findViewById(R.id.next);
@@ -118,15 +119,13 @@ public class FirstTimeActivity extends Activity {
             public void onClick(View v) {
                 keyText.clearFocus();
                 if (Integer.parseInt(Build.VERSION.SDK) >= 3) {
-                    // Use reflection to get the InputMethodManager and hide the keyboard
-                    // without reflection, java.lang.VerifyError is thrown on Android 1.0/1.1
                     try {
                         Class<?> immClass = Class.forName("android.view.inputmethod.InputMethodManager");
                         Object imm = getSystemService(Context.INPUT_METHOD_SERVICE);
                         Method hideMethod = immClass.getMethod(
                                 "hideSoftInputFromWindow",
-                                android.os.IBinder.class, //type of the first arg
-                                Integer.TYPE // type of the second arg
+                                android.os.IBinder.class,
+                                Integer.TYPE
                         );
                         hideMethod.invoke(imm, keyText.getWindowToken(), 0);
                     } catch (Exception e) {
@@ -196,8 +195,6 @@ public class FirstTimeActivity extends Activity {
             case 2:
                 break;
             case 1:
-                // On Android <=2.2, Cloudflare returns a 403 error, needs some research
-                // We need to use the old String var because SDK_INT got to exist only in Android 1.6
                 if (Integer.parseInt(Build.VERSION.SDK) < 9) {
                     new AlertDialog.Builder(this)
                         .setTitle(R.string.cloudflare_title)
@@ -212,18 +209,13 @@ public class FirstTimeActivity extends Activity {
             case 3:
                 apiConfig.updateApiKey(apiKey);
                 apiConfig.updateBaseUrl(ApiManager.getUrlByName(spinner.getSelectedItem().toString()));
-                //let's test the key by loading models
                 apiService.getModels(new ApiCallback<ArrayList<String>>() {
                     @Override
                     public void onSuccess(ArrayList<String> models) {
                         try {
-                            //key good!
-                            //since we loaded the models, let's select the best model automatically
                             apiConfig.updateChatModel(ModelSelector.selectChatModel(models));
-                            //Dirty fix but DeepSeek doesn't support thinking on VoidAI for some reason...
                             apiConfig.updateThinkingModel(spinner.getSelectedItem().toString().equals("VoidAI") ? "gemini-3-flash-preview" : ModelSelector.selectThinkingModel(models));
 
-                            // Then report to the user to start chatting
                             ProgressBar loading = (ProgressBar) findViewById(R.id.progress_loader);
                             loading.setVisibility(View.GONE);
 
@@ -260,7 +252,6 @@ public class FirstTimeActivity extends Activity {
 
                     @Override
                     public void onError(ApiError error) {
-                        //api is down/key is invalid, remove the key for stability
                         apiConfig.updateApiKey("");
                         error.printStackTrace();
                         Toast.makeText(context, getString(R.string.api_key_error) + " " + error.getMessage(), Toast.LENGTH_LONG).show();

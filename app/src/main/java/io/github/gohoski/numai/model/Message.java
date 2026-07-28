@@ -1,0 +1,110 @@
+package io.github.gohoski.numai.model;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import cc.nnproject.json.JSONArray;
+import cc.nnproject.json.JSONObject;
+
+public class Message {
+    private Role role = Role.USER;
+    private String content = "";
+    private String llm;
+    private List<String> inputImages;
+    private boolean isError = false;
+
+    public Message(Role role, String content) {
+        this.role = role;
+        this.content = content;
+    }
+    public Message(Role role, String content, String llm) {
+        this.role = role;
+        this.content = content;
+        this.llm = llm;
+    }
+    public Message(Role role, String content, List<String> inputImages, String llm) {
+        this.role = role;
+        this.content = content;
+        this.llm = llm;
+        this.inputImages = inputImages;
+    }
+
+    public String getRole() {
+        return role.toString();
+    }
+
+    public String getContent() {
+        return content;
+    }
+
+    public String getLlm() {
+        return llm;
+    }
+
+    public List<String> getInputImages() {
+        return inputImages;
+    }
+
+    public void updateContent(String additionalContent) {
+        this.content += additionalContent;
+    }
+
+    public void setContent(String newContent) {
+        this.content = newContent;
+    }
+
+    public boolean isSent() {
+        return role == Role.USER;
+    }
+
+    public void setAsError() {
+        isError = true;
+    }
+
+    public JSONObject toJSONObject() {
+        JSONObject json = new JSONObject();
+        json.put("role", role.toString());
+        json.put("content", content);
+        if (llm != null) json.put("llm", llm);
+        if (inputImages != null && !inputImages.isEmpty()) {
+            JSONArray imgArr = new JSONArray();
+            for (int i = 0; i < inputImages.size(); i++) {
+                imgArr.add(inputImages.get(i));
+            }
+            json.put("inputImages", imgArr);
+        }
+        json.put("isError", isError);
+        return json;
+    }
+
+    public static Message fromJSONObject(JSONObject json) {
+        String roleStr = json.getNullableString("role");
+        Role role = Role.USER;
+        if ("assistant".equals(roleStr)) {
+            role = Role.ASSISTANT;
+        } else if ("system".equals(roleStr)) {
+            role = Role.SYSTEM;
+        }
+
+        String content = json.getNullableString("content");
+        if (content == null) content = "";
+
+        String llm = json.getNullableString("llm");
+
+        List<String> inputImages = new ArrayList<String>();
+        if (json.has("inputImages")) {
+            JSONArray imgArr = json.getNullableArray("inputImages");
+            if (imgArr != null) {
+                for (int i = 0; i < imgArr.size(); i++) {
+                    inputImages.add(imgArr.getString(i));
+                }
+            }
+        }
+
+        Message message = new Message(role, content, inputImages, llm);
+        if (json.getBoolean("isError", false)) {
+            message.setAsError();
+        }
+        return message;
+    }
+}

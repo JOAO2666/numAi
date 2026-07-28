@@ -1,7 +1,9 @@
 package io.github.gohoski.numai;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -9,6 +11,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Looper;
 import android.text.ClipboardManager;
+import android.text.method.LinkMovementMethod;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -36,14 +39,21 @@ import java.util.List;
 import cc.nnproject.json.JSON;
 import cc.nnproject.json.JSONException;
 import cc.nnproject.json.JSONObject;
+import io.github.gohoski.numai.api.ApiCallback;
+import io.github.gohoski.numai.api.ApiError;
+import io.github.gohoski.numai.api.ApiResult;
+import io.github.gohoski.numai.api.ApiService;
+import io.github.gohoski.numai.data.ChatManager;
+import io.github.gohoski.numai.data.ConfigManager;
+import io.github.gohoski.numai.data.MessageManager;
+import io.github.gohoski.numai.model.Chat;
+import io.github.gohoski.numai.model.Message;
+import io.github.gohoski.numai.model.Role;
+import io.github.gohoski.numai.ui.MarkdownParser;
+import io.github.gohoski.numai.ui.MessageAdapter;
+import io.github.gohoski.numai.util.Base64;
+import io.github.gohoski.numai.util.SSLDisabler;
 
-/**
- * This program is free software. It comes without any warranty, to
- * the extent permitted by applicable law. You can redistribute it
- * and/or modify it under the terms of the Do What The Fuck You Want
- * To Public License, Version 2, as published by Sam Hocevar. See
- * http://www.wtfpl.net/ for more details.
- */
 public class MainActivity extends Activity {
     private static final int REQUEST_CODE_PICK_IMAGE = 1;
 
@@ -65,7 +75,6 @@ public class MainActivity extends Activity {
     private volatile boolean isCancelled = false;
     int UPDATE_DELAY_MS = 250;
 
-    // Stream buffers
     private final StringBuilder thinkBuffer = new StringBuilder();
     private final StringBuilder contentBuffer = new StringBuilder();
     private final List<String> inputImages = new ArrayList<String>();
@@ -83,6 +92,9 @@ public class MainActivity extends Activity {
             return;
         }
         UPDATE_DELAY_MS = config.getConfig().getUpdateDelay();
+
+        ChatManager.getInstance().loadChats(this);
+        ChatManager.getInstance().startNewChat();
 
         apiService = new ApiService(this);
         msgList = (ListView) findViewById(R.id.messages_list);
@@ -111,9 +123,9 @@ public class MainActivity extends Activity {
             }
         });
 
-        MessageManager.getInstance().clearMessages();
         adapter = new MessageAdapter(this, MessageManager.getInstance().getMessages());
         msgList.setAdapter(adapter);
+        scrollToBottom();
 
         if (config.getConfig().getShrinkThink()) {
             LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) thinkingToggle.getLayoutParams();
@@ -123,7 +135,6 @@ public class MainActivity extends Activity {
 
         msgList.setOnScrollListener(new AbsListView.OnScrollListener() {
             public void onScrollStateChanged(android.widget.AbsListView view, int scrollState) {
-                //If the user touches the screen or flings the list
                 if (scrollState == SCROLL_STATE_TOUCH_SCROLL || scrollState == SCROLL_STATE_FLING) {
                     autoScroll = false;
                 }
@@ -151,16 +162,71 @@ public class MainActivity extends Activity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
+            case R.id.chats:
+                showChatsDialog();
+                return true;
             case R.id.settings:
                 startActivity(new Intent(this, SettingsActivity.class));
                 finish();
                 return true;
             case R.id.about:
-                Toast.makeText(this, "numAi " + BuildConfig.VERSION_NAME + " (" + BuildConfig.BUILD_TYPE + ") ▶\ngithub.com/gohoski/numAi", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "numAi " + BuildConfig.VERSION_NAME + " (" + BuildConfig.BUILD_TYPE + ") \u25b6\ngithub.com/gohoski/numAi", Toast.LENGTH_SHORT).show();
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
         }
+    }
+
+    private void showChatsDialog() {
+        final List<Chat> sortedChats = ChatManager.getInstance().getSortedChats();
+        List<String> optionsList = new ArrayList<String>();
+        optionsList.add(getString(R.string.new_chat));
+        for (int i = 0; i < sortedChats.size(); i++) {
+            optionsList.add(sortedChats.get(i).getTitle());
+        }
+        final String[] options = optionsList.toArray(new String[0]);
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.chats)
+                .setItems(options, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        if (which == 0) {
+                            ChatManager.getInstance().startNewChat();
+                            refreshMessageAdapter();
+                        } else {
+                            final Chat selectedChat = sortedChats.get(which - 1);
+                            showChatOptionsDialog(selectedChat);
+                        }
+                    }
+                })
+                .show();
+    }
+
+    private void showChatOptionsDialog(final Chat chat) {
+        String[] actions = new String[]{getString(R.string.open), getString(R.string.delete)};
+        new AlertDialog.Builder(this)
+                .setTitle(chat.getTitle())
+                .setItems(actions, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        if (which == 0) {
+                            ChatManager.getInstance().setCurrentChat(chat);
+                            refreshMessageAdapter();
+                        } else if (which == 1) {
+                            ChatManager.getInstance().deleteChat(MainActivity.this, chat);
+                            refreshMessageAdapter();
+                        }
+                    }
+                })
+                .show();
+    }
+
+    private void refreshMessageAdapter() {
+        autoScroll = true;
+        adapter = new MessageAdapter(this, MessageManager.getInstance().getMessages());
+        msgList.setAdapter(adapter);
+        scrollToBottom();
     }
 
     @Override
@@ -196,7 +262,10 @@ public class MainActivity extends Activity {
                 msgList.post(new Runnable() {
                     public void run() {
                         adapter.notifyDataSetChanged();
-                        msgList.setSelection(adapter.getCount() - 1);
+                        int count = adapter.getCount();
+                        if (count > 0) {
+                            msgList.setSelection(count - 1);
+                        }
                     }
                 });
             }
@@ -206,13 +275,6 @@ public class MainActivity extends Activity {
     private void stopGeneration() {
         isCancelled = true;
 
-//        if (currentStream != null) {
-//            try {
-//                currentStream.close();
-//            } catch (IOException e) {e.printStackTrace();}
-//        }
-
-        //Remove the messages from the data source
         List<Message> msgs = MessageManager.getInstance().getMessages();
         int size = msgs.size();
         if (size > 0 && msgs.get(size - 1).getRole().equals(Role.ASSISTANT.toString())) {
@@ -223,8 +285,8 @@ public class MainActivity extends Activity {
             msgs.remove(size - 1);
         }
         resetUIState();
+        ChatManager.getInstance().onMessageAdded(this);
 
-        // Force adapter update
         runOnUiThread(new Runnable() {
             public void run() {
                 adapter.notifyDataSetChanged();
@@ -239,6 +301,8 @@ public class MainActivity extends Activity {
         isCancelled = false;
         currentStream = null;
         MessageManager.getInstance().addMessage(new Message(Role.USER, text, new ArrayList<String>(inputImages), null));
+        ChatManager.getInstance().onMessageAdded(this);
+
         input.setText("");
         sendBtn.setImageResource(R.drawable.ic_action_stop);
         input.setEnabled(false);
@@ -257,7 +321,7 @@ public class MainActivity extends Activity {
         apiService.chatCompletion(MessageManager.getInstance().getMessages(), thinkingEnabled, new ApiCallback<ApiResult>() {
             @Override
             public void onSuccess(final ApiResult apiResult) {
-                if (isCancelled)return;
+                if (isCancelled) return;
                 runOnUiThread(new Runnable() {
                     public void run() {
                         startResponseStream(apiResult.getResult(), apiResult.getModel(), thinkingEnabled);
@@ -266,7 +330,7 @@ public class MainActivity extends Activity {
             }
             @Override
             public void onError(final ApiError error) {
-                if (isCancelled)return;
+                if (isCancelled) return;
                 runOnUiThread(new Runnable() {
                     public void run() {
                         handleStreamError(error.getMessage());
@@ -281,6 +345,7 @@ public class MainActivity extends Activity {
         progressBar.setVisibility(View.GONE);
         final Message msg = new Message(Role.ASSISTANT, "", model);
         MessageManager.getInstance().addMessage(msg);
+        ChatManager.getInstance().onMessageAdded(this);
         adapter.notifyDataSetChanged();
         new Thread(new Runnable() {
             public void run() {
@@ -301,6 +366,7 @@ public class MainActivity extends Activity {
         Message error = new Message(Role.ASSISTANT, errorMsg, getString(R.string.error));
         error.setAsError();
         MessageManager.getInstance().addMessage(error);
+        ChatManager.getInstance().onMessageAdded(this);
         resetUIState();
     }
 
@@ -358,6 +424,7 @@ public class MainActivity extends Activity {
         runOnUiThread(new Runnable() {
             public void run() {
                 updateStreamUI(msg, thinkingEnabled, true);
+                ChatManager.getInstance().onMessageAdded(MainActivity.this);
                 resetUIState();
             }
         });
@@ -371,7 +438,7 @@ public class MainActivity extends Activity {
                 if (endTag != -1) {
                     thinkBuffer.append(token.substring(cursor, endTag));
                     isThinkingState = false;
-                    cursor = endTag + 8; // </think>
+                    cursor = endTag + 8;
                 } else {
                     thinkBuffer.append(token.substring(cursor));
                     break;
@@ -381,7 +448,7 @@ public class MainActivity extends Activity {
                 if (startTag != -1) {
                     contentBuffer.append(token.substring(cursor, startTag));
                     isThinkingState = true;
-                    cursor = startTag + 7; // <think>
+                    cursor = startTag + 7;
                 } else {
                     contentBuffer.append(token.substring(cursor));
                     break;
@@ -413,13 +480,19 @@ public class MainActivity extends Activity {
                 LinearLayout thinkLayout = (LinearLayout) view.findViewById(R.id.thinkingLayout);
                 TextView tvThink = (TextView) view.findViewById(R.id.thinkingProcess);
                 View vResponse = view.findViewById(R.id.response);
-                if (tvText != null) tvText.setText(displayContent);
+
+                if (tvText != null) {
+                    tvText.setMovementMethod(LinkMovementMethod.getInstance());
+                    tvText.setText(MarkdownParser.parse(displayContent));
+                }
+
                 if (thinkingEnabled) {
                     boolean hasThinkContent = displayThink.length() > 0;
                     if (hasThinkContent) {
                         thinkLayout.setVisibility(View.VISIBLE);
                         view.findViewById(R.id.noThinking).setVisibility(View.GONE);
-                        tvThink.setText(displayThink);
+                        tvThink.setMovementMethod(LinkMovementMethod.getInstance());
+                        tvThink.setText(MarkdownParser.parse(displayThink));
                         vResponse.setVisibility((displayContent.length() > 0 || isFinal) ? View.VISIBLE : View.GONE);
                     } else {
                         thinkLayout.setVisibility(View.VISIBLE);
@@ -466,7 +539,7 @@ public class MainActivity extends Activity {
                 while ((width / inSampleSize) > reqW) {
                     inSampleSize *= 2;
                 }
-            }else {
+            } else {
                 while ((height / inSampleSize) > reqH) {
                     inSampleSize *= 2;
                 }

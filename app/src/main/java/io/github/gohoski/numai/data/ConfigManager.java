@@ -1,14 +1,11 @@
-package io.github.gohoski.numai;
+package io.github.gohoski.numai.data;
 
 import android.content.Context;
 import android.content.SharedPreferences;
 
-/**
- * Use this class to change preferences
- *
- * Handles loading/saving user's settings and validates configuration format.
- */
-class ConfigManager {
+import io.github.gohoski.numai.model.Config;
+
+public class ConfigManager {
     private static final String PREFS_NAME = "numAi",
         KEY_BASE_URL = "baseUrl",
         KEY_API_KEY = "apiKey",
@@ -27,20 +24,18 @@ class ConfigManager {
         config = loadConfig();
     }
 
-    // Get singleton instance
-    static synchronized ConfigManager getInstance(Context context) {
+    public static synchronized ConfigManager getInstance(Context context) {
         if (instance == null)
             instance = new ConfigManager(context.getApplicationContext());
         return instance;
     }
 
-    static ConfigManager getInstance() {
+    public static ConfigManager getInstance() {
         if (instance == null)
             throw new IllegalStateException("ConfigManager not initialized; call getInstance(Context) first");
         return instance;
     }
 
-    // Load configuration from SharedPreferences
     private Config loadConfig() {
         return new Config(preferences.getString(KEY_BASE_URL, "https://api.voidai.app/v1"),
             preferences.getString(KEY_API_KEY, ""),
@@ -51,7 +46,6 @@ class ConfigManager {
             preferences.getInt(KEY_UPDATE_DELAY, 250));
     }
 
-    // Save configuration to SharedPreferences
     private void saveConfig() {
         SharedPreferences.Editor editor = preferences.edit();
         editor.putString(KEY_BASE_URL, config.getBaseUrl());
@@ -61,38 +55,38 @@ class ConfigManager {
         editor.putBoolean(KEY_SHRINK_THINK, config.getShrinkThink());
         editor.putString(KEY_SYSTEM_PROMPT, config.getSystemPrompt());
         editor.putInt(KEY_UPDATE_DELAY, config.getUpdateDelay());
-        editor.commit(); //apply() doesn't exist in Android 1.0
+        editor.commit();
     }
 
-    Config getConfig() {
+    public Config getConfig() {
         return config;
     }
 
-    void setConfig(Config config) {
+    public void setConfig(Config config) {
         this.config = config;
         saveConfig();
     }
 
-    void updateBaseUrl(String baseUrl) {
+    public void updateBaseUrl(String baseUrl) {
         config.setBaseUrl(baseUrl);
         saveConfig();
     }
 
-    void updateApiKey(String apiKey) {
+    public void updateApiKey(String apiKey) {
         config.setApiKey(apiKey);
         saveConfig();
     }
 
-    void updateChatModel(String model) {
+    public void updateChatModel(String model) {
         config.setChatModel(model);
         saveConfig();
     }
-    void updateThinkingModel(String model) {
+    public void updateThinkingModel(String model) {
         config.setThinkingModel(model);
         saveConfig();
     }
 
-    void updateSystemPrompt(String systemPrompt) {
+    public void updateSystemPrompt(String systemPrompt) {
         config.setSystemPrompt(systemPrompt);
         saveConfig();
     }

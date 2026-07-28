@@ -24,7 +24,7 @@
     <string name="api_key_error">An error happened. Check your API key and try again.</string>
     <string name="about">About</string>
     <string name="shrink_thinking">Shrink the Thinking button</string>
-    <string name="shrink_thinking_desc">In some Android 2.x UIs, a ToggleButton may be taller than a regular button, causing the interface to look slightly uneven. This option attempts to fix this issue (though not ideally).</string>
+    <string name="shrink_thinking_desc">In some Android 2.x UIs, a ToggleButton may be taller than a regular button, causing the interface to look slightly uneven. This option attempts to fix this issue.</string>
     <string name="chat_model">Chat model</string>
     <string name="thinking_model">Thinking model</string>
     <string name="img_count">[%s image(s)]</string>
@@ -42,4 +42,8 @@
     <string name="select_txt">Select file</string>
     <string name="key_success">Key successfully imported</string>
     <string name="api_note">Note: even if the models are successfully retrieved on the next screen, this does not mean that you have definitely entered the key correctly. If you have entered the key incorrectly, you will see a corresponding error in the chat interface.</string>
+    <string name="chats">Chats</string>
+    <string name="new_chat">+ New Chat</string>
+    <string name="open">Open</string>
+    <string name="delete">Delete</string>
 </resources>

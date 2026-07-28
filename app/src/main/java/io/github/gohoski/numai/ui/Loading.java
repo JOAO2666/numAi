@@ -1,14 +1,11 @@
-package io.github.gohoski.numai;
+package io.github.gohoski.numai.ui;
 
 import android.app.ProgressDialog;
 import android.content.Context;
 
-/**
- * Created by Gleb on 24.10.2025.
- * Loading popup
- */
+import io.github.gohoski.numai.R;
 
-class Loading extends ProgressDialog {
+public class Loading extends ProgressDialog {
     private Loading(Context context, int message) {
         super(context);
         this.setMessage(context.getString(message));
@@ -16,7 +13,7 @@ class Loading extends ProgressDialog {
         this.show();
     }
 
-    Loading(Context context) {
+    public Loading(Context context) {
         this(context, R.string.loading);
     }
 }

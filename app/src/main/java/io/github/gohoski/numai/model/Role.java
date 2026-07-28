@@ -1,10 +1,6 @@
-package io.github.gohoski.numai;
+package io.github.gohoski.numai.model;
 
-/**
- * Created by Gleb on 21.08.2025.
- */
-
-enum Role {
+public enum Role {
     SYSTEM("system"),
     USER("user"),
     ASSISTANT("assistant");

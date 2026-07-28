@@ -1,13 +1,8 @@
-package io.github.gohoski.numai;
+package io.github.gohoski.numai.util;
 
-/**
- * Created by Gleb on 14.12.2025.
- *
- * Minimal Base64 encoder based on public domain Base64 code by Robert Harder
- */
-class Base64 {
+public class Base64 {
     private final static char[] ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".toCharArray();
-    static String encode(byte[] source) {
+    public static String encode(byte[] source) {
         if (source == null) {
             return null;
         }

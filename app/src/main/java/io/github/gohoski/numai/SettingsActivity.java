@@ -20,9 +20,15 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Scanner;
 
-/**
- * Created by Gleb on 15.10.2025.
- */
+import io.github.gohoski.numai.api.ApiCallback;
+import io.github.gohoski.numai.api.ApiError;
+import io.github.gohoski.numai.api.ApiManager;
+import io.github.gohoski.numai.api.ApiService;
+import io.github.gohoski.numai.data.ConfigManager;
+import io.github.gohoski.numai.model.Config;
+import io.github.gohoski.numai.ui.Loading;
+import io.github.gohoski.numai.ui.SettingsHelper;
+import io.github.gohoski.numai.util.ModelSelector;
 
 public class SettingsActivity extends Activity {
     Context context;
@@ -205,10 +211,6 @@ public class SettingsActivity extends Activity {
     }
 
     private void loadModels(final Spinner spinner) {
-//        if (!keyText.getText().toString().equals(config.getConfig().getApiKey())) {
-//            Toast.makeText(this, R.string.change_key_pls, Toast.LENGTH_LONG).show();
-//            return;
-//        }
         if (fetched) {
             spinner.performClick();
             return;

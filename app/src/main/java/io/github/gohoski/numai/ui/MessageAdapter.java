@@ -1,6 +1,7 @@
-package io.github.gohoski.numai;
+package io.github.gohoski.numai.ui;
 
 import android.content.Context;
+import android.text.method.LinkMovementMethod;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -11,16 +12,15 @@ import android.widget.TextView;
 
 import java.util.List;
 
-/**
- * Created by Gleb on 16.08.2025.
- * adapter to easily control msg to UI
- */
-class MessageAdapter extends ArrayAdapter<Message> {
+import io.github.gohoski.numai.R;
+import io.github.gohoski.numai.model.Message;
+
+public class MessageAdapter extends ArrayAdapter<Message> {
     private static final int VIEW_TYPE_SENT = 0;
     private static final int VIEW_TYPE_RECEIVED = 1;
     private Context context;
 
-    MessageAdapter(Context context, List<Message> messages) {
+    public MessageAdapter(Context context, List<Message> messages) {
         super(context, R.layout.message_sent, messages);
         Log.d("MessageAdapter", "Created adapter with " + messages.size() + " messages");
         this.context = context;
@@ -67,9 +67,9 @@ class MessageAdapter extends ArrayAdapter<Message> {
             holder = (SentViewHolder) convertView.getTag();
         }
 
-        holder.messageText.setText(message.getContent() + (message.inputImages.isEmpty() ? "" : String.format("\n " + context.getString(R.string.img_count), String.valueOf(message.inputImages.size()))));
+        List<String> images = message.getInputImages();
+        holder.messageText.setText(message.getContent() + (images == null || images.isEmpty() ? "" : String.format("\n " + context.getString(R.string.img_count), String.valueOf(images.size()))));
 
-        // Request layout to ensure proper height calculation
         convertView.requestLayout();
 
         return convertView;
@@ -97,14 +97,14 @@ class MessageAdapter extends ArrayAdapter<Message> {
         String thinkingContent = extractThinkingContent(content);
         String displayContent = extractContentWithoutThinking(content);
 
-        holder.messageText.setText(displayContent);
+        holder.messageText.setMovementMethod(LinkMovementMethod.getInstance());
+        holder.messageText.setText(MarkdownParser.parse(displayContent));
         holder.llm.setText(message.getLlm());
-
-        //holder.messageText.setSingleLine(false);
 
         if (thinkingContent.length() != 0) {
             holder.thinkingLayout.setVisibility(View.VISIBLE);
-            holder.thinkingProcess.setText(thinkingContent);
+            holder.thinkingProcess.setMovementMethod(LinkMovementMethod.getInstance());
+            holder.thinkingProcess.setText(MarkdownParser.parse(thinkingContent));
         }
 
         convertView.requestLayout();
