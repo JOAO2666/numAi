@@ -7,13 +7,16 @@ import io.github.gohoski.numai.model.Config;
 
 public class ConfigManager {
     private static final String PREFS_NAME = "numAi",
-        KEY_BASE_URL = "baseUrl",
-        KEY_API_KEY = "apiKey",
-        KEY_CHAT_MODEL = "chatModel",
-        KEY_THINKING_MODEL = "thinkingModel",
-        KEY_SHRINK_THINK = "shrinkThink",
-        KEY_SYSTEM_PROMPT = "systemPrompt",
-        KEY_UPDATE_DELAY = "updateDelay";
+            KEY_BASE_URL = "baseUrl",
+            KEY_API_KEY = "apiKey",
+            KEY_CHAT_MODEL = "chatModel",
+            KEY_THINKING_MODEL = "thinkingModel",
+            KEY_SHRINK_THINK = "shrinkThink",
+            KEY_SYSTEM_PROMPT = "systemPrompt",
+            KEY_UPDATE_DELAY = "updateDelay",
+            KEY_WEB_SEARCH_ENABLED = "webSearchEnabled",
+            KEY_SEARCH_ENGINE = "searchEngine",
+            KEY_MAX_SEARCH_RESULTS = "maxSearchResults";
 
     private static ConfigManager instance;
     private final SharedPreferences preferences;
@@ -38,12 +41,15 @@ public class ConfigManager {
 
     private Config loadConfig() {
         return new Config(preferences.getString(KEY_BASE_URL, "https://api.voidai.app/v1"),
-            preferences.getString(KEY_API_KEY, ""),
-            preferences.getString(KEY_CHAT_MODEL, ""),
-            preferences.getString(KEY_THINKING_MODEL, ""),
-            preferences.getBoolean(KEY_SHRINK_THINK, false),
-            preferences.getString(KEY_SYSTEM_PROMPT, ""),
-            preferences.getInt(KEY_UPDATE_DELAY, 250));
+                preferences.getString(KEY_API_KEY, ""),
+                preferences.getString(KEY_CHAT_MODEL, ""),
+                preferences.getString(KEY_THINKING_MODEL, ""),
+                preferences.getBoolean(KEY_SHRINK_THINK, false),
+                preferences.getString(KEY_SYSTEM_PROMPT, ""),
+                preferences.getInt(KEY_UPDATE_DELAY, 250),
+                preferences.getBoolean(KEY_WEB_SEARCH_ENABLED, false),
+                preferences.getString(KEY_SEARCH_ENGINE, "bing"),
+                preferences.getInt(KEY_MAX_SEARCH_RESULTS, 5));
     }
 
     private void saveConfig() {
@@ -55,6 +61,9 @@ public class ConfigManager {
         editor.putBoolean(KEY_SHRINK_THINK, config.getShrinkThink());
         editor.putString(KEY_SYSTEM_PROMPT, config.getSystemPrompt());
         editor.putInt(KEY_UPDATE_DELAY, config.getUpdateDelay());
+        editor.putBoolean(KEY_WEB_SEARCH_ENABLED, config.isWebSearchEnabled());
+        editor.putString(KEY_SEARCH_ENGINE, config.getSearchEngine());
+        editor.putInt(KEY_MAX_SEARCH_RESULTS, config.getMaxSearchResults());
         editor.commit();
     }
 

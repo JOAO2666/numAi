@@ -37,7 +37,7 @@ public class SettingsActivity extends Activity {
     Spinner apiSpinner, chatSpinner, thinkSpinner;
     EditText keyText;
     boolean fetched = false;
-    CheckBox shrinkThink;
+    CheckBox shrinkThink, webSearch;
     String systemPrompt;
     EditText updateDelay;
 
@@ -111,6 +111,10 @@ public class SettingsActivity extends Activity {
 
         shrinkThink = (CheckBox) findViewById(R.id.shrinkThinking);
         shrinkThink.setChecked(conf.getShrinkThink());
+
+        webSearch = (CheckBox) findViewById(R.id.webSearch);
+        webSearch.setChecked(conf.isWebSearchEnabled());
+
         updateDelay = (EditText) findViewById(R.id.update_delay);
         updateDelay.setText(conf.getUpdateDelay()+"");
 
@@ -120,9 +124,15 @@ public class SettingsActivity extends Activity {
                 final String urlByName = ApiManager.getUrlByName(apiSpinner.getSelectedItem().toString());
                 if (conf.getBaseUrl().equals(urlByName)) {
                     config.setConfig(new Config(urlByName,
-                            keyText.getText().toString(), chatSpinner.getSelectedItem().toString(),
+                            keyText.getText().toString(),
+                            chatSpinner.getSelectedItem().toString(),
                             thinkSpinner.getSelectedItem().toString(),
-                            shrinkThink.isChecked(), systemPrompt, Integer.parseInt(updateDelay.getText().toString())));
+                            shrinkThink.isChecked(),
+                            systemPrompt,
+                            Integer.parseInt(updateDelay.getText().toString()),
+                            webSearch.isChecked(),
+                            conf.getSearchEngine(),
+                            conf.getMaxSearchResults()));
                     Intent intent = new Intent(context, MainActivity.class);
                     startActivity(intent);
                     finish();
@@ -134,9 +144,15 @@ public class SettingsActivity extends Activity {
                         @Override
                         public void onSuccess(ArrayList<String> models) {
                             config.setConfig(new Config(urlByName,
-                                    keyText.getText().toString(), ModelSelector.selectChatModel(models),
+                                    keyText.getText().toString(),
+                                    ModelSelector.selectChatModel(models),
                                     ModelSelector.selectThinkingModel(models),
-                                    shrinkThink.isChecked(), systemPrompt, Integer.parseInt(updateDelay.getText().toString())));
+                                    shrinkThink.isChecked(),
+                                    systemPrompt,
+                                    Integer.parseInt(updateDelay.getText().toString()),
+                                    webSearch.isChecked(),
+                                    conf.getSearchEngine(),
+                                    conf.getMaxSearchResults()));
                             loading.dismiss();
                             Intent intent = new Intent(context, MainActivity.class);
                             startActivity(intent);
@@ -146,7 +162,8 @@ public class SettingsActivity extends Activity {
                         @Override
                         public void onError(ApiError error) {
                             error.printStackTrace();
-                            Toast.makeText(context, error.getMessage(), Toast.LENGTH_LONG).show();loading.dismiss();
+                            Toast.makeText(context, error.getMessage(), Toast.LENGTH_LONG).show();
+                            loading.dismiss();
                             config.updateBaseUrl(orig);
                         }
                     });
@@ -170,16 +187,16 @@ public class SettingsActivity extends Activity {
                 edittext.setPadding(10, 10, 10, 10);
                 edittext.setText(systemPrompt);
                 new AlertDialog.Builder(context)
-                    .setTitle(R.string.change_system)
-                    .setView(edittext)
-                    .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialogInterface, int i) {
-                            systemPrompt = edittext.getText().toString();
-                        }
-                    })
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .show();
+                        .setTitle(R.string.change_system)
+                        .setView(edittext)
+                        .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialogInterface, int i) {
+                                systemPrompt = edittext.getText().toString();
+                            }
+                        })
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show();
             }
         });
 

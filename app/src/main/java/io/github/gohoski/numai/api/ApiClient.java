@@ -21,29 +21,48 @@ public class ApiClient {
     private final Context context;
 
     public ApiClient(Context context) {
-        this.context = context.getApplicationContext();
+        this.context = context != null ? context.getApplicationContext() : null;
     }
 
     public ApiResponse execute(ApiRequest request) throws ApiError {
         HttpURLConnection connection = null;
         InputStream inputStream = null;
         try {
-            Config config = ConfigManager.getInstance(context).getConfig();
-            Log.d("ApiClient", config.getBaseUrl());
-            String fullUrl = config.getBaseUrl() + request.getEndpoint();
+            String baseUrl = request.getBaseUrl();
+            String apiKey = null;
+
+            if (baseUrl == null && context != null) {
+                Config config = ConfigManager.getInstance(context).getConfig();
+                baseUrl = config.getBaseUrl();
+                apiKey = config.getApiKey();
+            }
+
+            if (baseUrl == null) {
+                baseUrl = "";
+            }
+
+            Log.d("ApiClient", baseUrl);
+            String fullUrl = baseUrl + request.getEndpoint();
             URL url = new URL(fullUrl);
             connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod(request.getMethod());
-            connection.setRequestProperty("Authorization", "Bearer " + config.getApiKey());
-            connection.setRequestProperty("User-Agent", "numAi/" + BuildConfig.VERSION_NAME + " (https://github.com/gohoski/numai)");
+            if (apiKey != null && apiKey.length() > 0) {
+                connection.setRequestProperty("Authorization", "Bearer " + apiKey);
+            }
+            connection.setRequestProperty("User-Agent", "numAi/" + BuildConfig.VERSION_NAME + " (https://github.com/gohoski/numAi)");
             connection.setRequestProperty("Accept", "application/json");
+
             for (Map.Entry<String, String> entry : request.getHeaders().entrySet()) {
                 connection.setRequestProperty(entry.getKey(), entry.getValue());
             }
+
             if ("POST".equals(request.getMethod())) {
-                connection.setRequestProperty("Content-Type", "application/json");
+                if (!request.getHeaders().containsKey("Content-Type")) {
+                    connection.setRequestProperty("Content-Type", "application/json");
+                }
                 connection.setDoOutput(true);
             }
+
             connection.setConnectTimeout(15000);
             if ("POST".equals(request.getMethod()) && request.getBody() != null && request.getBody().length() != 0) {
                 OutputStream outputStream = null;
@@ -59,6 +78,7 @@ public class ApiClient {
                     }
                 }
             }
+
             int statusCode = connection.getResponseCode();
             if (statusCode >= 200 && statusCode < 300) {
                 inputStream = connection.getInputStream();
@@ -78,28 +98,25 @@ public class ApiClient {
             if (connection != null) {
                 connection.disconnect();
             }
-            throw new ApiError(context.getString(R.string.errorNetwork,e.getMessage()));
+            String errMsg = e.getMessage();
+            if (context != null) {
+                errMsg = context.getString(R.string.errorNetwork, e.getMessage());
+            }
+            throw new ApiError(errMsg);
         }
     }
 
-    public String executeAsString(ApiRequest request) throws ApiError {
-        InputStream inputStream = null;
+    String executeAsString(ApiRequest request) throws ApiError {
         try {
             ApiResponse response = execute(request);
             return readInputStreamToString(response.getBody());
         } catch (Exception e) {
             e.printStackTrace();
             throw new ApiError(e.getMessage());
-        } finally {
-            if (inputStream != null) {
-                try {
-                    inputStream.close();
-                } catch (IOException ignored) {}
-            }
         }
     }
 
-    public String readInputStreamToString(InputStream inputStream) throws IOException {
+    String readInputStreamToString(InputStream inputStream) throws IOException {
         if (inputStream == null) {
             return "";
         }

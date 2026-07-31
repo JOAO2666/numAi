@@ -46,4 +46,6 @@
     <string name="new_chat">+ New Chat</string>
     <string name="open">Open</string>
     <string name="delete">Delete</string>
+    <string name="results">%d results</string>
+    <string name="web_search">Enable web search (Bing)</string>
 </resources>

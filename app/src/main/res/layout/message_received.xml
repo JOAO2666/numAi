@@ -1,50 +1,100 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="fill_parent"
     android:layout_height="wrap_content"
-    xmlns:tools="http://schemas.android.com/tools"
     android:orientation="vertical"
     android:padding="6dp">
 
     <!-- Thinking layout -->
     <LinearLayout
+        android:id="@+id/thinkingLayout"
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/thinking_bg"
-        android:padding="12dp"
+        android:layout_marginBottom="12dp"
         android:layout_marginLeft="4dp"
         android:layout_marginRight="4dp"
         android:layout_marginTop="4dp"
-        android:layout_marginBottom="12dp"
+        android:background="@drawable/thinking_bg"
         android:orientation="vertical"
-        android:id="@+id/thinkingLayout"
+        android:padding="12dp"
         android:visibility="gone">
+
         <TextView
             android:layout_width="fill_parent"
             android:layout_height="wrap_content"
             android:text="@string/thinking"
-            android:textStyle="bold"
-            android:textSize="18sp"/>
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
         <ProgressBar
+            android:id="@+id/noThinking"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:id="@+id/noThinking"
-            android:visibility="gone"/>
+            android:visibility="gone" />
+
         <TextView
-            tools:ignore="SmallSp"
+            android:id="@+id/thinkingProcess"
             android:layout_width="fill_parent"
             android:layout_height="wrap_content"
-            android:id="@+id/thinkingProcess"
+            android:textColor="@android:color/darker_gray"
             android:textSize="12sp"
-            android:textColor="@android:color/darker_gray"/>
+            tools:ignore="SmallSp" />
+    </LinearLayout>
+
+    <!-- Search layout -->
+    <LinearLayout
+        android:id="@+id/searchLayout"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="6dp"
+        android:layout_marginLeft="4dp"
+        android:layout_marginRight="4dp"
+        android:layout_marginTop="4dp"
+        android:background="@drawable/thinking_bg"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <RelativeLayout
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content">
+
+            <TextView
+                android:id="@+id/searchTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentLeft="true"
+                android:layout_toLeftOf="@+id/searchResultsCount"
+                android:text="@android:string/search_go"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/searchResultsCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:textColor="@android:color/darker_gray"
+                android:textSize="12sp"
+                tools:text="@string/results" />
+        </RelativeLayout>
+
+        <TextView
+            android:id="@+id/searchQueries"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="@android:color/darker_gray"
+            android:textSize="12sp" />
     </LinearLayout>
 
     <!-- Horizontal container for the blue line and TextView -->
     <LinearLayout
+        android:id="@+id/response"
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:id="@+id/response">
+        android:orientation="horizontal">
 
         <!-- Blue line -->
         <View
@@ -52,7 +102,7 @@
             android:layout_width="2dp"
             android:layout_height="fill_parent"
             android:layout_marginRight="8dp"
-            android:background="#2B88D9"/>
+            android:background="#2B88D9" />
 
         <LinearLayout
             android:layout_width="fill_parent"
@@ -66,7 +116,7 @@
                 android:layout_weight="1"
                 android:textColor="@android:color/white"
                 android:textSize="12sp"
-                android:textStyle="bold"/>
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/message_text"
@@ -74,7 +124,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:textColor="@android:color/white"
-                android:textSize="14sp"/>
+                android:textSize="14sp" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>

@@ -14,6 +14,7 @@ import cc.nnproject.json.JSONObject;
 import io.github.gohoski.numai.R;
 import io.github.gohoski.numai.data.ConfigManager;
 import io.github.gohoski.numai.model.Message;
+import io.github.gohoski.numai.model.Role;
 
 public class ApiService {
     private final ApiClient apiClient;
@@ -28,7 +29,6 @@ public class ApiService {
     }
 
     public void chatCompletion(final List<Message> msg, final boolean thinking, final ApiCallback<ApiResult> callback) {
-        System.out.println("chatCompletion...");
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -46,25 +46,35 @@ public class ApiService {
                     for (Message message : msg) {
                         JSONObject messageJson = new JSONObject();
                         messageJson.put("role", message.getRole());
-                        List<String> inputImages = message.getInputImages();
-                        if (inputImages == null || inputImages.isEmpty()) {
+
+                        if (message.getRoleEnum() == Role.TOOL) {
+                            messageJson.put("tool_call_id", message.getToolCallId());
                             messageJson.put("content", message.getContent());
+                        } else if (message.getToolCalls() != null) {
+                            messageJson.put("tool_calls", message.getToolCalls());
+                            // Standard OpenAI API expects content to be null or empty when sending tool calls back
+                            messageJson.put("content", (String) null);
                         } else {
-                            hasImg = true;
-                            JSONArray content = new JSONArray();
-                            JSONObject inputText = new JSONObject();
-                            inputText.put("type", "text");
-                            inputText.put("text", message.getContent());
-                            content.add(inputText);
-                            for (String image: inputImages) {
-                                JSONObject input = new JSONObject();
-                                input.put("type", "image_url");
-                                JSONObject imageUrl = new JSONObject();
-                                imageUrl.put("url", image);
-                                input.put("image_url", imageUrl);
-                                content.add(input);
+                            List<String> inputImages = message.getInputImages();
+                            if (inputImages == null || inputImages.isEmpty()) {
+                                messageJson.put("content", message.getContent());
+                            } else {
+                                hasImg = true;
+                                JSONArray content = new JSONArray();
+                                JSONObject inputText = new JSONObject();
+                                inputText.put("type", "text");
+                                inputText.put("text", message.getContent());
+                                content.add(inputText);
+                                for (String image: inputImages) {
+                                    JSONObject input = new JSONObject();
+                                    input.put("type", "image_url");
+                                    JSONObject imageUrl = new JSONObject();
+                                    imageUrl.put("url", image);
+                                    input.put("image_url", imageUrl);
+                                    content.add(input);
+                                }
+                                messageJson.put("content", content);
                             }
-                            messageJson.put("content", content);
                         }
                         messages.add(messageJson);
                     }
@@ -73,6 +83,37 @@ public class ApiService {
                     body.put("model", model);
                     body.put("messages", messages);
                     body.put("stream", true);
+
+                    if (config.getConfig().isWebSearchEnabled()) {
+                        JSONArray tools = new JSONArray();
+                        JSONObject tool = new JSONObject();
+                        tool.put("type", "function");
+
+                        JSONObject function = new JSONObject();
+                        function.put("name", "web_search");
+                        function.put("description", "Mandatory tool to fetch real-time facts, tech tutorials, and software compatibility info. Must be executed prior to answering any factual or technical user query.");
+
+                        JSONObject parameters = new JSONObject();
+                        parameters.put("type", "object");
+
+                        JSONObject properties = new JSONObject();
+                        JSONObject queryProp = new JSONObject();
+                        queryProp.put("type", "string");
+                        queryProp.put("description", "Search query keywords");
+                        properties.put("query", queryProp);
+
+                        parameters.put("properties", properties);
+                        JSONArray required = new JSONArray();
+                        required.add("query");
+                        parameters.put("required", required);
+
+                        function.put("parameters", parameters);
+                        tool.put("function", function);
+                        tools.add(tool);
+
+                        body.put("tools", tools);
+                    }
+
                     if (thinking) {
                         switch (config.getConfig().getBaseUrl()) {
                             case "https://openrouter.ai/api/v1":

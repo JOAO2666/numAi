@@ -12,6 +12,9 @@ public class Message {
     private String llm;
     private List<String> inputImages;
     private boolean isError = false;
+    private JSONArray toolCalls;
+    private String toolCallId;
+    private int searchResultCount = -1;
 
     public Message(Role role, String content) {
         this.role = role;
@@ -33,6 +36,10 @@ public class Message {
         return role.toString();
     }
 
+    public Role getRoleEnum() {
+        return role;
+    }
+
     public String getContent() {
         return content;
     }
@@ -43,6 +50,30 @@ public class Message {
 
     public List<String> getInputImages() {
         return inputImages;
+    }
+
+    public JSONArray getToolCalls() {
+        return toolCalls;
+    }
+
+    public void setToolCalls(JSONArray toolCalls) {
+        this.toolCalls = toolCalls;
+    }
+
+    public String getToolCallId() {
+        return toolCallId;
+    }
+
+    public void setToolCallId(String toolCallId) {
+        this.toolCallId = toolCallId;
+    }
+
+    public int getSearchResultCount() {
+        return searchResultCount;
+    }
+
+    public void setSearchResultCount(int searchResultCount) {
+        this.searchResultCount = searchResultCount;
     }
 
     public void updateContent(String additionalContent) {
@@ -73,6 +104,9 @@ public class Message {
             }
             json.put("inputImages", imgArr);
         }
+        if (toolCalls != null) json.put("toolCalls", toolCalls);
+        if (toolCallId != null) json.put("toolCallId", toolCallId);
+        if (searchResultCount >= 0) json.put("searchResultCount", searchResultCount);
         json.put("isError", isError);
         return json;
     }
@@ -84,6 +118,8 @@ public class Message {
             role = Role.ASSISTANT;
         } else if ("system".equals(roleStr)) {
             role = Role.SYSTEM;
+        } else if ("tool".equals(roleStr)) {
+            role = Role.TOOL;
         }
 
         String content = json.getNullableString("content");
@@ -102,6 +138,15 @@ public class Message {
         }
 
         Message message = new Message(role, content, inputImages, llm);
+        if (json.has("toolCalls")) {
+            message.setToolCalls(json.getArray("toolCalls"));
+        }
+        if (json.has("toolCallId")) {
+            message.setToolCallId(json.getNullableString("toolCallId"));
+        }
+        if (json.has("searchResultCount")) {
+            message.setSearchResultCount(json.getInt("searchResultCount", -1));
+        }
         if (json.getBoolean("isError", false)) {
             message.setAsError();
         }

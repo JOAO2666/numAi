@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import cc.nnproject.json.JSON;
+import cc.nnproject.json.JSONArray;
 import cc.nnproject.json.JSONException;
 import cc.nnproject.json.JSONObject;
 import io.github.gohoski.numai.api.ApiCallback;
@@ -49,6 +50,9 @@ import io.github.gohoski.numai.data.MessageManager;
 import io.github.gohoski.numai.model.Chat;
 import io.github.gohoski.numai.model.Message;
 import io.github.gohoski.numai.model.Role;
+import io.github.gohoski.numai.search.SearchEngine;
+import io.github.gohoski.numai.search.SearchManager;
+import io.github.gohoski.numai.search.SearchResult;
 import io.github.gohoski.numai.ui.MarkdownParser;
 import io.github.gohoski.numai.ui.MessageAdapter;
 import io.github.gohoski.numai.util.Base64;
@@ -78,6 +82,12 @@ public class MainActivity extends Activity {
     private final StringBuilder thinkBuffer = new StringBuilder();
     private final StringBuilder contentBuffer = new StringBuilder();
     private final List<String> inputImages = new ArrayList<String>();
+
+    private static class StreamToolCall {
+        String id = "";
+        String name = "";
+        StringBuilder arguments = new StringBuilder();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -313,11 +323,16 @@ public class MainActivity extends Activity {
         adapter.notifyDataSetChanged();
         scrollToBottom();
 
+        requestAICompletion();
+    }
+
+    private void requestAICompletion() {
         thinkBuffer.setLength(0);
         contentBuffer.setLength(0);
         isThinkingState = false;
         isGenerating = true;
         final boolean thinkingEnabled = thinkingToggle.isChecked();
+
         apiService.chatCompletion(MessageManager.getInstance().getMessages(), thinkingEnabled, new ApiCallback<ApiResult>() {
             @Override
             public void onSuccess(final ApiResult apiResult) {
@@ -382,21 +397,49 @@ public class MainActivity extends Activity {
     }
 
     private void readStream(InputStream inputStream, final Message msg, final boolean thinkingEnabled) throws IOException {
-        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"));
+        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8192);
         String line;
         long lastUpdateTime = 0;
+        List<StreamToolCall> streamToolCalls = new ArrayList<StreamToolCall>();
+
         while (!isCancelled && (line = reader.readLine()) != null) {
             if (!line.startsWith("data: ")) continue;
             String jsonData = line.substring(6).trim();
             if ("[DONE]".equals(jsonData)) break;
             try {
                 JSONObject delta = JSON.getObject(jsonData).getArray("choices").getObject(0).getObject("delta");
+
+                if (delta.has("tool_calls")) {
+                    JSONArray tcArr = delta.getArray("tool_calls");
+                    for (int i = 0; i < tcArr.size(); i++) {
+                        JSONObject tcObj = tcArr.getObject(i);
+                        int index = tcObj.getInt("index", 0);
+                        while (streamToolCalls.size() <= index) {
+                            streamToolCalls.add(new StreamToolCall());
+                        }
+                        StreamToolCall stc = streamToolCalls.get(index);
+                        if (tcObj.has("id")) {
+                            stc.id = tcObj.getString("id");
+                        }
+                        if (tcObj.has("function")) {
+                            JSONObject fnObj = tcObj.getObject("function");
+                            if (fnObj.has("name")) {
+                                stc.name = fnObj.getString("name");
+                            }
+                            if (fnObj.has("arguments")) {
+                                stc.arguments.append(fnObj.getString("arguments"));
+                            }
+                        }
+                    }
+                }
+
                 String contentStr = null;
                 try {
                     contentStr = delta.getString("content");
                 } catch(JSONException ignored) {}
                 String reasoningStr = extractJSONReasoning(delta);
                 boolean hasUpdates = false;
+
                 if (thinkingEnabled) {
                     if (reasoningStr != null && reasoningStr.length() > 0) {
                         thinkBuffer.append(reasoningStr);
@@ -407,10 +450,12 @@ public class MainActivity extends Activity {
                         hasUpdates = true;
                     }
                 } else {
-                    if (reasoningStr != null) contentBuffer.append(reasoningStr);
-                    if (contentStr != null) contentBuffer.append(contentStr);
-                    hasUpdates = (reasoningStr != null || contentStr != null);
+                    if (contentStr != null && contentStr.length() > 0) {
+                        processContentWithTags(contentStr);
+                        hasUpdates = true;
+                    }
                 }
+
                 long currentTime = System.currentTimeMillis();
                 if (hasUpdates && (currentTime - lastUpdateTime >= UPDATE_DELAY_MS)) {
                     lastUpdateTime = currentTime;
@@ -421,13 +466,127 @@ public class MainActivity extends Activity {
             }
         }
         if (isCancelled) return;
+
+        final List<StreamToolCall> finalToolCalls = streamToolCalls;
         runOnUiThread(new Runnable() {
             public void run() {
                 updateStreamUI(msg, thinkingEnabled, true);
-                ChatManager.getInstance().onMessageAdded(MainActivity.this);
-                resetUIState();
+                if (!finalToolCalls.isEmpty()) {
+                    executeToolCalls(msg, finalToolCalls);
+                } else {
+                    ChatManager.getInstance().onMessageAdded(MainActivity.this);
+                    resetUIState();
+                }
             }
         });
+    }
+
+    private void executeToolCalls(final Message assistantMsg, final List<StreamToolCall> toolCalls) {
+        JSONArray toolCallsArray = new JSONArray();
+        final List<String> queriesToSearch = new ArrayList<String>();
+        final List<String> callIds = new ArrayList<String>();
+
+        for (int i = 0; i < toolCalls.size(); i++) {
+            StreamToolCall stc = toolCalls.get(i);
+            JSONObject tcJson = new JSONObject();
+            tcJson.put("id", stc.id);
+            tcJson.put("type", "function");
+
+            JSONObject fnJson = new JSONObject();
+            fnJson.put("name", stc.name);
+            fnJson.put("arguments", stc.arguments.toString());
+            tcJson.put("function", fnJson);
+            toolCallsArray.add(tcJson);
+
+            if ("web_search".equals(stc.name)) {
+                try {
+                    JSONObject args = JSON.getObject(stc.arguments.toString());
+                    String q = args.getString("query");
+                    queriesToSearch.add(q);
+                    callIds.add(stc.id);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        assistantMsg.setToolCalls(toolCallsArray);
+        assistantMsg.setSearchResultCount(0); // initial status "0 results"
+
+        if (queriesToSearch.isEmpty()) {
+            resetUIState();
+            return;
+        }
+
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                adapter.notifyDataSetChanged();
+                scrollToBottom();
+            }
+        });
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                SearchEngine engine = SearchManager.getInstance().getEngine(MainActivity.this);
+                int totalResults = 0;
+
+                for (int i = 0; i < queriesToSearch.size(); i++) {
+                    String q = queriesToSearch.get(i);
+                    String callId = callIds.get(i);
+                    String resultText;
+                    try {
+                        List<SearchResult> results = engine.search(q);
+                        JSONObject responseJson = new JSONObject();
+                        responseJson.put("query", q);
+                        if (results == null || results.isEmpty()) {
+                            Log.d("SearchEngine", "No results");
+                            responseJson.put("status", "no_results");
+                            responseJson.put("results", new JSONArray());
+                        } else {
+                            totalResults += results.size();
+                            Log.d("SearchEngine", Integer.toString(results.size()));
+                            Log.d("SearchEngine", results.toString());
+                            responseJson.put("status", "success");
+                            JSONArray resultsArray = new JSONArray();
+                            int max = Math.min(results.size(), config.getConfig().getMaxSearchResults());
+                            for (int k = 0; k < max; k++) {
+                                SearchResult res = results.get(k);
+                                JSONObject item = new JSONObject();
+                                item.put("title", res.getTitle());
+                                item.put("url", res.getUrl());
+                                item.put("snippet", res.getSnippet());
+                                resultsArray.add(item);
+                            }
+                            responseJson.put("results", resultsArray);
+                        }
+                        resultText = responseJson.toString();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        resultText = "{\"status\": \"error\", \"message\": \"" + e.getMessage() + "\"}";
+                    }
+
+                    Message toolMessage = new Message(Role.TOOL, resultText);
+                    toolMessage.setToolCallId(callId);
+                    MessageManager.getInstance().addMessage(toolMessage);
+                }
+
+                assistantMsg.setSearchResultCount(totalResults);
+
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        adapter.notifyDataSetChanged();
+                        if (!isCancelled) {
+                            requestAICompletion();
+                        } else {
+                            resetUIState();
+                        }
+                    }
+                });
+            }
+        }).start();
     }
 
     private void processContentWithTags(String token) {
@@ -466,9 +625,15 @@ public class MainActivity extends Activity {
             });
             return;
         }
-        String displayContent = contentBuffer.toString();
+        String displayContent = cleanChannelTokens(contentBuffer.toString());
         String displayThink = thinkBuffer.toString();
-        msg.setContent(displayContent);
+
+        if (thinkingEnabled && displayThink.length() > 0) {
+            msg.setContent("<think>" + displayThink + "</think>" + displayContent);
+        } else {
+            msg.setContent(displayContent);
+        }
+
         int firstVis = msgList.getFirstVisiblePosition();
         int lastVis = msgList.getLastVisiblePosition();
         int count = adapter.getCount();
@@ -490,28 +655,45 @@ public class MainActivity extends Activity {
                     boolean hasThinkContent = displayThink.length() > 0;
                     if (hasThinkContent) {
                         thinkLayout.setVisibility(View.VISIBLE);
-                        view.findViewById(R.id.noThinking).setVisibility(View.GONE);
-                        tvThink.setMovementMethod(LinkMovementMethod.getInstance());
-                        tvThink.setText(MarkdownParser.parse(displayThink));
-                        vResponse.setVisibility((displayContent.length() > 0 || isFinal) ? View.VISIBLE : View.GONE);
+                        View noThink = view.findViewById(R.id.noThinking);
+                        if (noThink != null) noThink.setVisibility(View.GONE);
+                        if (tvThink != null) {
+                            tvThink.setMovementMethod(LinkMovementMethod.getInstance());
+                            tvThink.setText(MarkdownParser.parse(displayThink));
+                        }
                     } else {
                         thinkLayout.setVisibility(View.VISIBLE);
-                        view.findViewById(R.id.noThinking).setVisibility(View.VISIBLE);
-                        vResponse.setVisibility(View.GONE);
-                    }
-
-                    if (isFinal && !hasThinkContent && displayContent.length() > 0) {
-                        thinkLayout.setVisibility(View.GONE);
-                        vResponse.setVisibility(View.VISIBLE);
+                        View noThink = view.findViewById(R.id.noThinking);
+                        if (noThink != null) noThink.setVisibility(View.VISIBLE);
                     }
                 } else {
-                    vResponse.setVisibility(View.VISIBLE);
                     if (thinkLayout != null) thinkLayout.setVisibility(View.GONE);
+                }
+
+                if (vResponse != null) {
+                    vResponse.setVisibility((displayContent.length() > 0) ? View.VISIBLE : View.GONE);
                 }
             }
         }
 
         if (autoScroll) scrollToBottom();
+    }
+
+    private static String cleanChannelTokens(String text) {
+        if (text == null || text.length() == 0) return "";
+        if (text.indexOf('<') == -1 && text.indexOf('t') == -1 && text.indexOf('T') == -1) {
+            return text;
+        }
+        String cleaned = text.trim();
+        if (cleaned.regionMatches(true, 0, "thought", 0, 7)) {
+            cleaned = cleaned.substring(7).trim();
+        }
+        if (cleaned.startsWith("<|channel|>")) {
+            cleaned = cleaned.substring(11).trim();
+        } else if (cleaned.startsWith("<channel>")) {
+            cleaned = cleaned.substring(9).trim();
+        }
+        return cleaned;
     }
 
     public static Bitmap decodeSampledBitmap(Context ctx, Uri uri, int reqW, int reqH) throws IOException {
