@@ -35,6 +35,7 @@
                     android:hint="@string/enter_api_key"
                     android:inputType="textPassword"
                     android:layout_weight="1"
+                    android:singleLine="true"
                     android:id="@+id/apiKey"/>
 
                 <Button

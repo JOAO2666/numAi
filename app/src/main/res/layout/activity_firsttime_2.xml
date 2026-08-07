@@ -1,30 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="vertical" android:layout_width="fill_parent"
+    android:orientation="vertical"
+    android:layout_width="fill_parent"
     android:layout_height="fill_parent">
+
     <ScrollView
         android:layout_width="fill_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:fillViewport="true">
+
         <LinearLayout
             android:layout_width="fill_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="16dp">
+
             <TextView
                 android:layout_width="fill_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/voidaisetup"
+                android:text="@string/api_key_setup"
                 android:textStyle="bold"
-                android:textSize="20sp"/>
+                android:textSize="20sp"
+                android:paddingBottom="8dp"/>
+
+            <Spinner
+                android:id="@+id/provider_guide_spinner"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="12dp"/>
+
+            <TextView
+                android:id="@+id/guide_title"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:textStyle="bold"
+                android:textSize="18sp"
+                android:paddingTop="8dp"
+                android:paddingBottom="4dp"/>
+
+            <TextView
+                android:id="@+id/guide_text"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="vertical"
+                android:textSize="15sp"/>
+
             <TextView
                 android:layout_width="fill_parent"
                 android:layout_height="wrap_content"
                 android:scrollbars="vertical"
-                android:text="@string/firsttime_2"
-                android:paddingBottom="16dp"
-                android:textSize="15sp"/>
+                android:textSize="15sp"
+                android:text="@string/copy_key"/>
         </LinearLayout>
     </ScrollView>
 
@@ -39,7 +66,6 @@
             android:text="@string/back"
             android:id="@+id/back"/>
 
-        <!-- Empty view to take up space between buttons -->
         <View
             android:layout_width="0dp"
             android:layout_height="0dp"

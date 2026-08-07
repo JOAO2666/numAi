@@ -16,6 +16,7 @@ import java.util.regex.Pattern;
 
 import cc.nnproject.json.JSON;
 import cc.nnproject.json.JSONArray;
+import cc.nnproject.json.JSONException;
 import cc.nnproject.json.JSONObject;
 import io.github.gohoski.numai.R;
 import io.github.gohoski.numai.model.Message;
@@ -118,6 +119,8 @@ public class MessageAdapter extends ArrayAdapter<Message> {
             holder.searchLayout = (LinearLayout) convertView.findViewById(R.id.searchLayout);
             holder.searchResultsCount = (TextView) convertView.findViewById(R.id.searchResultsCount);
             holder.searchQueries = (TextView) convertView.findViewById(R.id.searchQueries);
+            holder.readingLayout = (LinearLayout) convertView.findViewById(R.id.readingLayout);
+            holder.readingUrls = (TextView) convertView.findViewById(R.id.readingUrls);
             holder.response = convertView.findViewById(R.id.response);
             convertView.setTag(holder);
         } else {
@@ -129,59 +132,81 @@ public class MessageAdapter extends ArrayAdapter<Message> {
         String thinkingContent = extractThinkingContent(content);
         String displayContent = extractContentWithoutThinking(content);
 
-        // 1. Thinking Box
+        // Thinking Box
         if (thinkingContent.length() != 0) {
             holder.thinkingLayout.setVisibility(View.VISIBLE);
             holder.thinkingProcess.setMovementMethod(LinkMovementMethod.getInstance());
-            holder.thinkingProcess.setText(MarkdownParser.parse(thinkingContent));
+            holder.thinkingProcess.setText(MarkdownParser.parse(context, thinkingContent, false));
         } else {
             holder.thinkingLayout.setVisibility(View.GONE);
         }
 
-        // 2. Search Box
+        // Search Box
         JSONArray toolCalls = message.getToolCalls();
-        List<String> queries = new ArrayList<String>();
+        List<String> toolActions = new ArrayList<String>();
+        List<String> readingActions = new ArrayList<String>();
         if (toolCalls != null) {
             for (int i = 0; i < toolCalls.size(); i++) {
                 try {
                     JSONObject tc = toolCalls.getObject(i);
                     JSONObject fn = tc.getObject("function");
-                    if (fn != null && "web_search".equals(fn.getString("name"))) {
+                    if (fn != null) {
+                        String name = fn.getString("name");
                         String argsStr = fn.getString("arguments");
                         JSONObject args = JSON.getObject(argsStr);
-                        if (args.has("query")) {
-                            queries.add(args.getString("query"));
+                        if ("web_search".equals(name)) {
+                            try {
+                                toolActions.add(args.getString("query"));
+                            } catch (JSONException e) { e.printStackTrace(); }
+                        } else if ("web_fetch".equals(name)) {
+                            try {
+                                readingActions.add(args.getString("url"));
+                            } catch (JSONException e) { e.printStackTrace(); }
                         }
                     }
                 } catch (Exception ignored) {}
             }
         }
 
-        if (!queries.isEmpty()) {
+        if (!toolActions.isEmpty()) {
             holder.searchLayout.setVisibility(View.VISIBLE);
-            StringBuilder qText = new StringBuilder();
-            for (int i = 0; i < queries.size(); i++) {
-                if (i > 0) qText.append("\n");
-                qText.append("• ").append(queries.get(i));
+            StringBuilder actionText = new StringBuilder();
+            for (int i = 0; i < toolActions.size(); i++) {
+                if (i > 0) actionText.append("\n");
+                actionText.append("• ").append(toolActions.get(i));
             }
-            holder.searchQueries.setText(qText.toString());
+            holder.searchQueries.setText(actionText.toString());
 
             int resultCount = message.getSearchResultCount();
-            if (resultCount >= 0) {
-                holder.searchResultsCount.setText(resultCount == 1 ? "1 result" : resultCount + " results");
+            if (resultCount > 0) {
+                holder.searchResultsCount.setVisibility(View.VISIBLE);
+                holder.searchResultsCount.setText(context.getResources().getQuantityString(R.plurals.results, resultCount, resultCount));
             } else {
-                holder.searchResultsCount.setText("0 results");
+                holder.searchResultsCount.setVisibility(View.GONE);
             }
         } else {
             holder.searchLayout.setVisibility(View.GONE);
         }
 
-        // 3. Response Box
+        // Reading sources Box
+        if (!readingActions.isEmpty()) {
+            holder.readingLayout.setVisibility(View.VISIBLE);
+            StringBuilder readingText = new StringBuilder();
+            for (int i = 0; i < readingActions.size(); i++) {
+                if (i > 0) readingText.append("\n");
+                readingText.append("• ").append(readingActions.get(i));
+            }
+            holder.readingUrls.setText(readingText.toString());
+        } else {
+            holder.readingLayout.setVisibility(View.GONE);
+        }
+
+        // Response Box
         holder.llm.setText(message.getLlm());
         if (displayContent.length() != 0) {
             holder.response.setVisibility(View.VISIBLE);
             holder.messageText.setMovementMethod(LinkMovementMethod.getInstance());
-            holder.messageText.setText(MarkdownParser.parse(displayContent));
+            holder.messageText.setText(MarkdownParser.parse(context, displayContent, false));
         } else {
             holder.response.setVisibility(View.GONE);
         }
@@ -241,6 +266,8 @@ public class MessageAdapter extends ArrayAdapter<Message> {
         LinearLayout searchLayout;
         TextView searchResultsCount;
         TextView searchQueries;
+        LinearLayout readingLayout;
+        TextView readingUrls;
         View response;
     }
 }

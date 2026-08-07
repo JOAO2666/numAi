@@ -9,6 +9,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import io.github.gohoski.numai.BuildConfig;
@@ -41,53 +44,106 @@ public class ApiClient {
                 baseUrl = "";
             }
 
-            Log.d("ApiClient", baseUrl);
             String fullUrl = baseUrl + request.getEndpoint();
-            URL url = new URL(fullUrl);
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod(request.getMethod());
-            if (apiKey != null && apiKey.length() > 0) {
-                connection.setRequestProperty("Authorization", "Bearer " + apiKey);
-            }
-            connection.setRequestProperty("User-Agent", "numAi/" + BuildConfig.VERSION_NAME + " (https://github.com/gohoski/numAi)");
-            connection.setRequestProperty("Accept", "application/json");
+            Map<String, List<String>> combinedHeaders = new HashMap<String, List<String>>();
+            int redirectCount = 0;
 
-            for (Map.Entry<String, String> entry : request.getHeaders().entrySet()) {
-                connection.setRequestProperty(entry.getKey(), entry.getValue());
-            }
+            while (redirectCount < 5) {
+                Log.d("ApiClient", fullUrl);
+                URL url = new URL(fullUrl);
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setInstanceFollowRedirects(false); // Manual redirect handling to preserve Set-Cookie
+                connection.setRequestMethod(request.getMethod());
 
-            if ("POST".equals(request.getMethod())) {
-                if (!request.getHeaders().containsKey("Content-Type")) {
-                    connection.setRequestProperty("Content-Type", "application/json");
+                if (apiKey != null && apiKey.length() > 0) {
+                    connection.setRequestProperty("Authorization", "Bearer " + apiKey);
                 }
-                connection.setDoOutput(true);
-            }
+                connection.setRequestProperty("User-Agent", "numAi/" + BuildConfig.VERSION_NAME + " (https://github.com/gohoski/numAi)");
+                connection.setRequestProperty("Accept", "application/json");
 
-            connection.setConnectTimeout(15000);
-            if ("POST".equals(request.getMethod()) && request.getBody() != null && request.getBody().length() != 0) {
-                OutputStream outputStream = null;
-                try {
-                    outputStream = connection.getOutputStream();
-                    outputStream.write(request.getBody().getBytes());
-                    outputStream.flush();
-                } finally {
-                    if (outputStream != null) {
-                        try {
-                            outputStream.close();
-                        } catch (IOException ignored) {}
+                for (Map.Entry<String, String> entry : request.getHeaders().entrySet()) {
+                    connection.setRequestProperty(entry.getKey(), entry.getValue());
+                }
+
+                if ("POST".equals(request.getMethod())) {
+                    if (!request.getHeaders().containsKey("Content-Type")) {
+                        connection.setRequestProperty("Content-Type", "application/json");
+                    }
+                    connection.setDoOutput(true);
+                }
+
+                connection.setConnectTimeout(12000);
+                connection.setReadTimeout(40000);
+
+                if ("POST".equals(request.getMethod()) && request.getBody() != null && request.getBody().length() != 0) {
+                    OutputStream outputStream = null;
+                    try {
+                        outputStream = connection.getOutputStream();
+                        outputStream.write(request.getBody().getBytes());
+                        outputStream.flush();
+                    } finally {
+                        if (outputStream != null) {
+                            try {
+                                outputStream.close();
+                            } catch (IOException ignored) {}
+                        }
                     }
                 }
+
+                int statusCode = connection.getResponseCode();
+
+                // Merge response headers (specifically Set-Cookie) across redirects
+                if (connection.getHeaderFields() != null) {
+                    for (Map.Entry<String, List<String>> entry : connection.getHeaderFields().entrySet()) {
+                        if (entry.getKey() != null && "Set-Cookie".equalsIgnoreCase(entry.getKey())) {
+                            List<String> cookies = combinedHeaders.get("Set-Cookie");
+                            if (cookies == null) {
+                                cookies = new ArrayList<String>();
+                                combinedHeaders.put("Set-Cookie", cookies);
+                            }
+                            cookies.addAll(entry.getValue());
+                        } else if (entry.getKey() != null) {
+                            combinedHeaders.put(entry.getKey(), entry.getValue());
+                        }
+                    }
+                }
+
+                if (statusCode == HttpURLConnection.HTTP_MOVED_PERM
+                        || statusCode == HttpURLConnection.HTTP_MOVED_TEMP
+                        || statusCode == HttpURLConnection.HTTP_SEE_OTHER
+                        || statusCode == 307) {
+                    String loc = connection.getHeaderField("Location");
+                    if (loc != null && loc.length() > 0) {
+                        fullUrl = loc.startsWith("http") ? loc : baseUrl + loc;
+                        redirectCount++;
+                        connection.disconnect();
+
+                        // Update Cookie header for the redirected request if cookies were set
+                        List<String> cookies = combinedHeaders.get("Set-Cookie");
+                        if (cookies != null && !cookies.isEmpty()) {
+                            StringBuilder cookieHeader = new StringBuilder();
+                            for (String c : cookies) {
+                                String pair = c.split(";")[0].trim();
+                                if (cookieHeader.length() > 0) cookieHeader.append("; ");
+                                cookieHeader.append(pair);
+                            }
+                            request.addHeader("Cookie", cookieHeader.toString());
+                        }
+                        continue;
+                    }
+                }
+
+                if (statusCode >= 200 && statusCode < 300) {
+                    inputStream = connection.getInputStream();
+                } else {
+                    inputStream = connection.getErrorStream();
+                }
+                ConnectionInputStream connStream = new ConnectionInputStream(inputStream, connection);
+
+                return new ApiResponse(statusCode, connStream, combinedHeaders);
             }
 
-            int statusCode = connection.getResponseCode();
-            if (statusCode >= 200 && statusCode < 300) {
-                inputStream = connection.getInputStream();
-            } else {
-                inputStream = connection.getErrorStream();
-            }
-            ConnectionInputStream connStream = new ConnectionInputStream(inputStream, connection);
-
-            return new ApiResponse(statusCode, connStream);
+            throw new ApiError("Too many redirects");
         } catch (IOException e) {
             e.printStackTrace();
             if (inputStream != null) {

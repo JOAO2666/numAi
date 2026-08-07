@@ -53,6 +53,7 @@ import io.github.gohoski.numai.model.Role;
 import io.github.gohoski.numai.search.SearchEngine;
 import io.github.gohoski.numai.search.SearchManager;
 import io.github.gohoski.numai.search.SearchResult;
+import io.github.gohoski.numai.search.WebFetcher;
 import io.github.gohoski.numai.ui.MarkdownParser;
 import io.github.gohoski.numai.ui.MessageAdapter;
 import io.github.gohoski.numai.util.Base64;
@@ -151,16 +152,69 @@ public class MainActivity extends Activity {
             }
             public void onScroll(android.widget.AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {}
         });
-        final Context ctx = this;
+
         msgList.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
             @Override
-            public boolean onItemLongClick(AdapterView<?> adapterView, View view, int i, long l) {
-                ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                clipboard.setText(((TextView) view.findViewById(R.id.message_text)).getText());
-                Toast.makeText(ctx, R.string.text_copied, Toast.LENGTH_SHORT).show();
+            public boolean onItemLongClick(AdapterView<?> adapterView, View view, int position, long id) {
+                if (position < 0 || position >= adapter.getCount()) return true;
+                final Message selectedMsg = adapter.getItem(position);
+                if (selectedMsg == null) return true;
+
+                String[] options = new String[]{getString(android.R.string.copy), getString(R.string.chats) != null ? "Regenerate" : "Regenerate"};
+                new AlertDialog.Builder(MainActivity.this)
+                        .setItems(options, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                if (which == 0) {
+                                    ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                                    clipboard.setText(selectedMsg.getContent());
+                                    Toast.makeText(MainActivity.this, R.string.text_copied, Toast.LENGTH_SHORT).show();
+                                } else if (which == 1) {
+                                    regenerateFromMessage(selectedMsg);
+                                }
+                            }
+                        })
+                        .show();
                 return true;
             }
         });
+    }
+
+    private void regenerateFromMessage(final Message selectedMsg) {
+        if (isGenerating) {
+            stopGeneration();
+        }
+        List<Message> msgs = MessageManager.getInstance().getMessages();
+        int index = msgs.indexOf(selectedMsg);
+        if (index == -1) return;
+
+        if (selectedMsg.isSent()) {
+            while (msgs.size() > index + 1) {
+                msgs.remove(msgs.size() - 1);
+            }
+        } else {
+            while (msgs.size() > index) {
+                msgs.remove(msgs.size() - 1);
+            }
+        }
+
+        if (msgs.isEmpty()) return;
+
+        autoScroll = true;
+        isCancelled = false;
+        currentStream = null;
+
+        sendBtn.setImageResource(R.drawable.ic_action_stop);
+        input.setEnabled(false);
+        attachBtn.setEnabled(false);
+        progressBar.setVisibility(View.VISIBLE);
+        inputImages.clear();
+        imgCount.setVisibility(View.GONE);
+
+        ChatManager.getInstance().onMessageAdded(this);
+        refreshMessageAdapter();
+
+        requestAICompletion();
     }
 
     @Override
@@ -221,7 +275,7 @@ public class MainActivity extends Activity {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
                         if (which == 0) {
-                            ChatManager.getInstance().setCurrentChat(chat);
+                            ChatManager.getInstance().setCurrentChat(MainActivity.this, chat);
                             refreshMessageAdapter();
                         } else if (which == 1) {
                             ChatManager.getInstance().deleteChat(MainActivity.this, chat);
@@ -403,40 +457,59 @@ public class MainActivity extends Activity {
         List<StreamToolCall> streamToolCalls = new ArrayList<StreamToolCall>();
 
         while (!isCancelled && (line = reader.readLine()) != null) {
-            if (!line.startsWith("data: ")) continue;
-            String jsonData = line.substring(6).trim();
+            if (!line.startsWith("data:")) continue;
+            String jsonData = line.substring(5).trim();
             if ("[DONE]".equals(jsonData)) break;
             try {
-                JSONObject delta = JSON.getObject(jsonData).getArray("choices").getObject(0).getObject("delta");
+                JSONObject jsonObj = JSON.getObject(jsonData);
+                if (!jsonObj.has("choices")) continue;
 
-                if (delta.has("tool_calls")) {
+                JSONArray choices = jsonObj.getArray("choices");
+                if (choices == null || choices.size() == 0) continue;
+
+                JSONObject choiceObj = choices.getObject(0);
+                if (choiceObj == null || !choiceObj.has("delta")) continue;
+
+                JSONObject delta = choiceObj.getObject("delta");
+                if (delta == null) continue;
+
+                if (delta.has("tool_calls") && !delta.isNull("tool_calls")) {
                     JSONArray tcArr = delta.getArray("tool_calls");
-                    for (int i = 0; i < tcArr.size(); i++) {
-                        JSONObject tcObj = tcArr.getObject(i);
-                        int index = tcObj.getInt("index", 0);
-                        while (streamToolCalls.size() <= index) {
-                            streamToolCalls.add(new StreamToolCall());
-                        }
-                        StreamToolCall stc = streamToolCalls.get(index);
-                        if (tcObj.has("id")) {
-                            stc.id = tcObj.getString("id");
-                        }
-                        if (tcObj.has("function")) {
-                            JSONObject fnObj = tcObj.getObject("function");
-                            if (fnObj.has("name")) {
-                                stc.name = fnObj.getString("name");
+                    if (tcArr != null) {
+                        for (int i = 0; i < tcArr.size(); i++) {
+                            JSONObject tcObj = tcArr.getObject(i);
+                            if (tcObj == null) continue;
+
+                            int index = tcObj.getInt("index", 0);
+                            while (streamToolCalls.size() <= index) {
+                                streamToolCalls.add(new StreamToolCall());
                             }
-                            if (fnObj.has("arguments")) {
-                                stc.arguments.append(fnObj.getString("arguments"));
+                            StreamToolCall stc = streamToolCalls.get(index);
+                            if (tcObj.has("id") && !tcObj.isNull("id")) {
+                                stc.id = tcObj.getString("id");
+                            }
+                            if (tcObj.has("function") && !tcObj.isNull("function")) {
+                                JSONObject fnObj = tcObj.getObject("function");
+                                if (fnObj != null) {
+                                    if (fnObj.has("name") && !fnObj.isNull("name")) {
+                                        stc.name = fnObj.getString("name");
+                                    }
+                                    if (fnObj.has("arguments") && !fnObj.isNull("arguments")) {
+                                        stc.arguments.append(fnObj.getString("arguments"));
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
                 String contentStr = null;
-                try {
-                    contentStr = delta.getString("content");
-                } catch(JSONException ignored) {}
+                if (delta.has("content") && !delta.isNull("content")) {
+                    try {
+                        contentStr = delta.getString("content");
+                    } catch (JSONException ignored) {}
+                }
+
                 String reasoningStr = extractJSONReasoning(delta);
                 boolean hasUpdates = false;
 
@@ -483,8 +556,7 @@ public class MainActivity extends Activity {
 
     private void executeToolCalls(final Message assistantMsg, final List<StreamToolCall> toolCalls) {
         JSONArray toolCallsArray = new JSONArray();
-        final List<String> queriesToSearch = new ArrayList<String>();
-        final List<String> callIds = new ArrayList<String>();
+        final List<StreamToolCall> executableCalls = new ArrayList<StreamToolCall>();
 
         for (int i = 0; i < toolCalls.size(); i++) {
             StreamToolCall stc = toolCalls.get(i);
@@ -498,22 +570,15 @@ public class MainActivity extends Activity {
             tcJson.put("function", fnJson);
             toolCallsArray.add(tcJson);
 
-            if ("web_search".equals(stc.name)) {
-                try {
-                    JSONObject args = JSON.getObject(stc.arguments.toString());
-                    String q = args.getString("query");
-                    queriesToSearch.add(q);
-                    callIds.add(stc.id);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+            if ("web_search".equals(stc.name) || "web_fetch".equals(stc.name)) {
+                executableCalls.add(stc);
             }
         }
 
         assistantMsg.setToolCalls(toolCallsArray);
-        assistantMsg.setSearchResultCount(0); // initial status "0 results"
+        assistantMsg.setSearchResultCount(0);
 
-        if (queriesToSearch.isEmpty()) {
+        if (executableCalls.isEmpty()) {
             resetUIState();
             return;
         }
@@ -529,44 +594,60 @@ public class MainActivity extends Activity {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                SearchEngine engine = SearchManager.getInstance().getEngine(MainActivity.this);
                 int totalResults = 0;
+                WebFetcher webFetcher = new WebFetcher();
 
-                for (int i = 0; i < queriesToSearch.size(); i++) {
-                    String q = queriesToSearch.get(i);
-                    String callId = callIds.get(i);
+                for (int i = 0; i < executableCalls.size(); i++) {
+                    StreamToolCall stc = executableCalls.get(i);
+                    String callId = stc.id;
                     String resultText;
-                    try {
-                        List<SearchResult> results = engine.search(q);
-                        JSONObject responseJson = new JSONObject();
-                        responseJson.put("query", q);
-                        if (results == null || results.isEmpty()) {
-                            Log.d("SearchEngine", "No results");
-                            responseJson.put("status", "no_results");
-                            responseJson.put("results", new JSONArray());
-                        } else {
-                            totalResults += results.size();
-                            Log.d("SearchEngine", Integer.toString(results.size()));
-                            Log.d("SearchEngine", results.toString());
-                            responseJson.put("status", "success");
-                            JSONArray resultsArray = new JSONArray();
-                            int max = Math.min(results.size(), config.getConfig().getMaxSearchResults());
-                            for (int k = 0; k < max; k++) {
-                                SearchResult res = results.get(k);
-                                JSONObject item = new JSONObject();
-                                item.put("title", res.getTitle());
-                                item.put("url", res.getUrl());
-                                item.put("snippet", res.getSnippet());
-                                resultsArray.add(item);
+
+                    if ("web_search".equals(stc.name)) {
+                        SearchEngine engine = SearchManager.getInstance().getEngine(MainActivity.this);
+                        try {
+                            JSONObject args = JSON.getObject(stc.arguments.toString());
+                            String q = args.getString("query");
+                            List<SearchResult> results = engine.search(q);
+                            JSONObject responseJson = new JSONObject();
+                            responseJson.put("query", q);
+                            if (results == null || results.isEmpty()) {
+                                Log.d("SearchEngine", "No results");
+                                responseJson.put("status", "no_results");
+                                responseJson.put("results", new JSONArray());
+                            } else {
+                                totalResults += results.size();
+                                responseJson.put("status", "success");
+                                JSONArray resultsArray = new JSONArray();
+                                for (int k = 0; k < results.size(); k++) {
+                                    SearchResult res = results.get(k);
+                                    JSONObject item = new JSONObject();
+                                    item.put("title", res.getTitle());
+                                    item.put("url", res.getUrl());
+                                    item.put("snippet", res.getSnippet());
+                                    resultsArray.add(item);
+                                }
+                                responseJson.put("results", resultsArray);
                             }
-                            responseJson.put("results", resultsArray);
+                            resultText = responseJson.toString();
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            resultText = "{\"status\": \"error\", \"message\": \"" + e.getMessage() + "\"}";
                         }
-                        resultText = responseJson.toString();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        resultText = "{\"status\": \"error\", \"message\": \"" + e.getMessage() + "\"}";
+                    } else if ("web_fetch".equals(stc.name)) {
+                        try {
+                            JSONObject args = JSON.getObject(stc.arguments.toString());
+                            String targetUrl = args.getString("url");
+                            resultText = "URL: " + targetUrl + "\n" + webFetcher.fetch(targetUrl);
+                            totalResults++;
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            resultText = e.getMessage();
+                        }
+                    } else {
+                        resultText = "{\"status\": \"error\", \"message\": \"Unsupported tool call\"}";
                     }
 
+                    System.out.println(resultText);
                     Message toolMessage = new Message(Role.TOOL, resultText);
                     toolMessage.setToolCallId(callId);
                     MessageManager.getInstance().addMessage(toolMessage);
@@ -648,7 +729,7 @@ public class MainActivity extends Activity {
 
                 if (tvText != null) {
                     tvText.setMovementMethod(LinkMovementMethod.getInstance());
-                    tvText.setText(MarkdownParser.parse(displayContent));
+                    tvText.setText(MarkdownParser.parse(MainActivity.this, displayContent, !isFinal));
                 }
 
                 if (thinkingEnabled) {
@@ -659,7 +740,7 @@ public class MainActivity extends Activity {
                         if (noThink != null) noThink.setVisibility(View.GONE);
                         if (tvThink != null) {
                             tvThink.setMovementMethod(LinkMovementMethod.getInstance());
-                            tvThink.setText(MarkdownParser.parse(displayThink));
+                            tvThink.setText(MarkdownParser.parse(MainActivity.this, displayThink, !isFinal));
                         }
                     } else {
                         thinkLayout.setVisibility(View.VISIBLE);
@@ -731,14 +812,25 @@ public class MainActivity extends Activity {
     }
 
     private String extractJSONReasoning(JSONObject delta) {
+        if (delta == null) return null;
         try {
             return delta.getString("reasoning");
-        } catch (Exception e) {
-            try {
-                return delta.getArray("reasoning_content").getObject(0).getString("thinking");
-            } catch(Exception _) {
-                return null;
+        } catch (Exception ignored) {}
+
+        try {
+            return delta.getString("reasoning_content");
+        } catch (Exception ignored) {}
+
+        try {
+            JSONArray arr = delta.getArray("reasoning_content");
+            if (arr != null && arr.size() > 0) {
+                JSONObject obj = arr.getObject(0);
+                if (obj != null && !obj.isNull("thinking")) {
+                    return obj.getString("thinking");
+                }
             }
-        }
+        } catch (Exception ignored) {}
+
+        return null;
     }
 }

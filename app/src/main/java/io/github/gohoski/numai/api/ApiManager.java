@@ -12,12 +12,14 @@ public class ApiManager {
 
     static {
         addApi("VoidAI", "https://api.voidai.app/v1");
-        addApi("Ollama", "https://ollama.com/v1");
+        addApi("Ollama Cloud", "https://ollama.com/v1");
+        addApi("OpenCode Zen", "https://opencode.ai/zen/v1");
         addApi("NavyAI", "https://api.navy/v1");
         addApi("OpenRouter","https://openrouter.ai/api/v1");
         addApi("Google AI Studio","https://generativelanguage.googleapis.com/v1beta/openai");
         addApi("Z.ai","http://api.z.ai/api/paas/v4");
         addApi("BigModel (Z.ai China)","http://open.bigmodel.cn/api/paas/v4");
+        addApi("Kilo Gateway", "https://api.kilo.ai/api/gateway");
     }
 
     private static void addApi(String name, String url) {

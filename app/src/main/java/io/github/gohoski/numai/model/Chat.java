@@ -46,6 +46,21 @@ public class Chat {
         return json;
     }
 
+    public JSONObject toIndexJSONObject() {
+        JSONObject json = new JSONObject();
+        json.put("id", id);
+        json.put("title", title);
+        json.put("updatedAt", updatedAt);
+        return json;
+    }
+
+    public static Chat fromIndexJSONObject(JSONObject json) {
+        String id = json.getNullableString("id");
+        String title = json.getNullableString("title");
+        long updatedAt = json.getLong("updatedAt", System.currentTimeMillis());
+        return new Chat(id, title, updatedAt);
+    }
+
     public static Chat fromJSONObject(JSONObject json) {
         String id = json.getNullableString("id");
         String title = json.getNullableString("title");

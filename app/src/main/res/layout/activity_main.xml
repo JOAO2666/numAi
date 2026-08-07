@@ -14,7 +14,7 @@
         android:dividerHeight="0dp"
         android:padding="8dp"
         android:stackFromBottom="false"
-        android:cacheColorHint="@color/background"
+        android:cacheColorHint="@android:color/transparent"
         android:transcriptMode="alwaysScroll"
         tools:listheader="@layout/message_sent"
         tools:listitem="@layout/message_received"/>

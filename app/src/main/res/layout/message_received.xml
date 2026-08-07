@@ -6,7 +6,7 @@
     android:orientation="vertical"
     android:padding="6dp">
 
-    <!-- Thinking layout -->
+    <!-- 1. Thinking layout -->
     <LinearLayout
         android:id="@+id/thinkingLayout"
         android:layout_width="fill_parent"
@@ -42,61 +42,14 @@
             tools:ignore="SmallSp" />
     </LinearLayout>
 
-    <!-- Search layout -->
-    <LinearLayout
-        android:id="@+id/searchLayout"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="6dp"
-        android:layout_marginLeft="4dp"
-        android:layout_marginRight="4dp"
-        android:layout_marginTop="4dp"
-        android:background="@drawable/thinking_bg"
-        android:orientation="vertical"
-        android:padding="12dp"
-        android:visibility="gone">
-
-        <RelativeLayout
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content">
-
-            <TextView
-                android:id="@+id/searchTitle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_alignParentLeft="true"
-                android:layout_toLeftOf="@+id/searchResultsCount"
-                android:text="@android:string/search_go"
-                android:textSize="14sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/searchResultsCount"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_alignParentRight="true"
-                android:textColor="@android:color/darker_gray"
-                android:textSize="12sp"
-                tools:text="@string/results" />
-        </RelativeLayout>
-
-        <TextView
-            android:id="@+id/searchQueries"
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textColor="@android:color/darker_gray"
-            android:textSize="12sp" />
-    </LinearLayout>
-
-    <!-- Horizontal container for the blue line and TextView -->
+    <!-- 2. Horizontal container for response text (emitted before or without search) -->
     <LinearLayout
         android:id="@+id/response"
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal">
 
-        <!-- Blue line -->
+        <!-- Blue accent line -->
         <View
             android:id="@+id/accent"
             android:layout_width="2dp"
@@ -127,4 +80,83 @@
                 android:textSize="14sp" />
         </LinearLayout>
     </LinearLayout>
+
+    <!-- 3. Search layout (placed after the preliminary response) -->
+    <LinearLayout
+        android:id="@+id/searchLayout"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="6dp"
+        android:layout_marginLeft="4dp"
+        android:layout_marginRight="4dp"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/thinking_bg"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <RelativeLayout
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content">
+
+            <TextView
+                android:id="@+id/searchTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentLeft="true"
+                android:layout_toLeftOf="@+id/searchResultsCount"
+                android:text="@android:string/search_go"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/searchResultsCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:textColor="@android:color/darker_gray"
+                android:textSize="12sp"
+                tools:text="12 results" />
+        </RelativeLayout>
+
+        <TextView
+            android:id="@+id/searchQueries"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="@android:color/darker_gray"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- 4. Reading sources layout (shown when the model uses web_fetch) -->
+    <LinearLayout
+        android:id="@+id/readingLayout"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="6dp"
+        android:layout_marginLeft="4dp"
+        android:layout_marginRight="4dp"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/thinking_bg"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/readingTitle"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/reading_sources"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/readingUrls"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="@android:color/darker_gray"
+            android:textSize="12sp" />
+    </LinearLayout>
+
 </LinearLayout>

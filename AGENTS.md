@@ -1,5 +1,5 @@
 # numAi — Agent Guide
-
+An AI client made for Android 1.0+ with support for thinking, vision and web search.
 ## Architecture
 
 - **3 activities**: `MainActivity`, `FirstTimeActivity`, `SettingsActivity` (root package). No Fragments, no support libs.

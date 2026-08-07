@@ -52,8 +52,11 @@ public class ApiService {
                             messageJson.put("content", message.getContent());
                         } else if (message.getToolCalls() != null) {
                             messageJson.put("tool_calls", message.getToolCalls());
-                            // Standard OpenAI API expects content to be null or empty when sending tool calls back
-                            messageJson.put("content", (String) null);
+                            if (message.getContent() != null && message.getContent().trim().length() > 0) {
+                                messageJson.put("content", message.getContent());
+                            } else {
+                                messageJson.put("content", (String) null);
+                            }
                         } else {
                             List<String> inputImages = message.getInputImages();
                             if (inputImages == null || inputImages.isEmpty()) {
@@ -86,6 +89,7 @@ public class ApiService {
 
                     if (config.getConfig().isWebSearchEnabled()) {
                         JSONArray tools = new JSONArray();
+
                         JSONObject tool = new JSONObject();
                         tool.put("type", "function");
 
@@ -110,6 +114,31 @@ public class ApiService {
                         function.put("parameters", parameters);
                         tool.put("function", function);
                         tools.add(tool);
+
+                        JSONObject fetchTool = new JSONObject();
+                        fetchTool.put("type", "function");
+
+                        JSONObject fetchFunction = new JSONObject();
+                        fetchFunction.put("name", "web_fetch");
+                        fetchFunction.put("description", "Fetches and extracts full text content from a target web page URL as clean Markdown to read articles, documentation, or news.");
+
+                        JSONObject fetchParams = new JSONObject();
+                        fetchParams.put("type", "object");
+
+                        JSONObject fetchProps = new JSONObject();
+                        JSONObject urlProp = new JSONObject();
+                        urlProp.put("type", "string");
+                        urlProp.put("description", "Target URL to fetch and read");
+                        fetchProps.put("url", urlProp);
+
+                        fetchParams.put("properties", fetchProps);
+                        JSONArray fetchRequired = new JSONArray();
+                        fetchRequired.add("url");
+                        fetchParams.put("required", fetchRequired);
+
+                        fetchFunction.put("parameters", fetchParams);
+                        fetchTool.put("function", fetchFunction);
+                        tools.add(fetchTool);
 
                         body.put("tools", tools);
                     }

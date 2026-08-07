@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical" android:layout_width="fill_parent"
-    android:layout_height="fill_parent"
-    android:theme="@android:style/Theme.Holo">
+    android:layout_height="fill_parent">
     <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
         android:layout_width="fill_parent"
         android:layout_height="0dp"
@@ -35,6 +34,7 @@
                     android:hint="@string/enter_api_key"
                     android:inputType="textPassword"
                     android:layout_weight="1"
+                    android:singleLine="true"
                     android:id="@+id/apiKey"/>
 
                 <Button

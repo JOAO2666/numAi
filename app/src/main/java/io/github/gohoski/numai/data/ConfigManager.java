@@ -15,8 +15,7 @@ public class ConfigManager {
             KEY_SYSTEM_PROMPT = "systemPrompt",
             KEY_UPDATE_DELAY = "updateDelay",
             KEY_WEB_SEARCH_ENABLED = "webSearchEnabled",
-            KEY_SEARCH_ENGINE = "searchEngine",
-            KEY_MAX_SEARCH_RESULTS = "maxSearchResults";
+            KEY_SEARCH_ENGINE = "searchEngine";
 
     private static ConfigManager instance;
     private final SharedPreferences preferences;
@@ -47,9 +46,8 @@ public class ConfigManager {
                 preferences.getBoolean(KEY_SHRINK_THINK, false),
                 preferences.getString(KEY_SYSTEM_PROMPT, ""),
                 preferences.getInt(KEY_UPDATE_DELAY, 250),
-                preferences.getBoolean(KEY_WEB_SEARCH_ENABLED, false),
-                preferences.getString(KEY_SEARCH_ENGINE, "bing"),
-                preferences.getInt(KEY_MAX_SEARCH_RESULTS, 5));
+                preferences.getBoolean(KEY_WEB_SEARCH_ENABLED, true),
+                preferences.getString(KEY_SEARCH_ENGINE, "bing"));
     }
 
     private void saveConfig() {
@@ -63,7 +61,6 @@ public class ConfigManager {
         editor.putInt(KEY_UPDATE_DELAY, config.getUpdateDelay());
         editor.putBoolean(KEY_WEB_SEARCH_ENABLED, config.isWebSearchEnabled());
         editor.putString(KEY_SEARCH_ENGINE, config.getSearchEngine());
-        editor.putInt(KEY_MAX_SEARCH_RESULTS, config.getMaxSearchResults());
         editor.commit();
     }
 

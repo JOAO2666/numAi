@@ -10,15 +10,14 @@ public class Config {
     private int updateDelay;
     private boolean webSearchEnabled;
     private String searchEngine;
-    private int maxSearchResults;
 
     public Config() {}
 
     public Config(String baseUrl, String apiKey, String chatModel, String thinkingModel, boolean shrinkThink, String systemPrompt, int updateDelay) {
-        this(baseUrl, apiKey, chatModel, thinkingModel, shrinkThink, systemPrompt, updateDelay, false, "bing", 5);
+        this(baseUrl, apiKey, chatModel, thinkingModel, shrinkThink, systemPrompt, updateDelay, false, "bing");
     }
 
-    public Config(String baseUrl, String apiKey, String chatModel, String thinkingModel, boolean shrinkThink, String systemPrompt, int updateDelay, boolean webSearchEnabled, String searchEngine, int maxSearchResults) {
+    public Config(String baseUrl, String apiKey, String chatModel, String thinkingModel, boolean shrinkThink, String systemPrompt, int updateDelay, boolean webSearchEnabled, String searchEngine) {
         this.baseUrl = baseUrl;
         this.apiKey = apiKey;
         this.chatModel = chatModel;
@@ -28,7 +27,6 @@ public class Config {
         this.updateDelay = updateDelay;
         this.webSearchEnabled = webSearchEnabled;
         this.searchEngine = searchEngine;
-        this.maxSearchResults = maxSearchResults;
     }
 
     public String getBaseUrl() { return baseUrl; }
@@ -57,9 +55,6 @@ public class Config {
 
     public String getSearchEngine() { return searchEngine; }
     public void setSearchEngine(String searchEngine) { this.searchEngine = searchEngine; }
-
-    public int getMaxSearchResults() { return maxSearchResults; }
-    public void setMaxSearchResults(int maxSearchResults) { this.maxSearchResults = maxSearchResults; }
 
     public boolean isValid() {
         return baseUrl != null && baseUrl.trim().length() != 0 &&

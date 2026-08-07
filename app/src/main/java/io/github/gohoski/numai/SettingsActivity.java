@@ -131,8 +131,7 @@ public class SettingsActivity extends Activity {
                             systemPrompt,
                             Integer.parseInt(updateDelay.getText().toString()),
                             webSearch.isChecked(),
-                            conf.getSearchEngine(),
-                            conf.getMaxSearchResults()));
+                            conf.getSearchEngine()));
                     Intent intent = new Intent(context, MainActivity.class);
                     startActivity(intent);
                     finish();
@@ -151,8 +150,7 @@ public class SettingsActivity extends Activity {
                                     systemPrompt,
                                     Integer.parseInt(updateDelay.getText().toString()),
                                     webSearch.isChecked(),
-                                    conf.getSearchEngine(),
-                                    conf.getMaxSearchResults()));
+                                    conf.getSearchEngine()));
                             loading.dismiss();
                             Intent intent = new Intent(context, MainActivity.class);
                             startActivity(intent);

@@ -29,9 +29,9 @@ public class SearchManager {
     public SearchEngine getEngine(Context context) {
         String name = ConfigManager.getInstance(context).getConfig().getSearchEngine();
         if ("bing".equalsIgnoreCase(name)) {
-            return new BingSearchEngine();
+            return new Bing();
         }
-        return new BingSearchEngine();
+        return new Bing();
     }
 
     public void executeSearch(final Context context, final String query, final ApiCallback<List<SearchResult>> callback) {
