@@ -37,7 +37,7 @@ public class SettingsActivity extends Activity {
     Spinner apiSpinner, chatSpinner, thinkSpinner;
     EditText keyText;
     boolean fetched = false;
-    CheckBox shrinkThink, webSearch;
+    CheckBox shrinkThink, webSearch, webFetch;
     String systemPrompt;
     EditText updateDelay;
 
@@ -115,6 +115,9 @@ public class SettingsActivity extends Activity {
         webSearch = (CheckBox) findViewById(R.id.webSearch);
         webSearch.setChecked(conf.isWebSearchEnabled());
 
+        webFetch = (CheckBox) findViewById(R.id.webFetch);
+        webFetch.setChecked(conf.isWebFetchEnabled());
+
         updateDelay = (EditText) findViewById(R.id.update_delay);
         updateDelay.setText(conf.getUpdateDelay()+"");
 
@@ -131,7 +134,8 @@ public class SettingsActivity extends Activity {
                             systemPrompt,
                             Integer.parseInt(updateDelay.getText().toString()),
                             webSearch.isChecked(),
-                            conf.getSearchEngine()));
+                            conf.getSearchEngine(),
+                            webFetch.isChecked()));
                     Intent intent = new Intent(context, MainActivity.class);
                     startActivity(intent);
                     finish();
@@ -150,7 +154,8 @@ public class SettingsActivity extends Activity {
                                     systemPrompt,
                                     Integer.parseInt(updateDelay.getText().toString()),
                                     webSearch.isChecked(),
-                                    conf.getSearchEngine()));
+                                    conf.getSearchEngine(),
+                                    webFetch.isChecked()));
                             loading.dismiss();
                             Intent intent = new Intent(context, MainActivity.class);
                             startActivity(intent);

@@ -97,7 +97,13 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/web_search"
-                android:id="@+id/webSearch"
+                android:id="@+id/webSearch"/>
+
+            <CheckBox
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/web_fetch"
+                android:id="@+id/webFetch"
                 android:layout_marginBottom="12dp"/>
 
             <Button

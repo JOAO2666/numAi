@@ -48,6 +48,7 @@
     </plurals>
     <string name="reading_sources">Reading sources</string>
     <string name="web_search">Enable web search (Bing)</string>
+    <string name="web_fetch">Enable web fetch</string>
     <string name="view_table">View table</string>
     <string name="generating_table">Generating table…</string>
     <string name="recommended">%s (Recommended)</string>

@@ -9,15 +9,16 @@ public class Config {
     private String systemPrompt;
     private int updateDelay;
     private boolean webSearchEnabled;
+    private boolean webFetchEnabled;
     private String searchEngine;
 
     public Config() {}
 
     public Config(String baseUrl, String apiKey, String chatModel, String thinkingModel, boolean shrinkThink, String systemPrompt, int updateDelay) {
-        this(baseUrl, apiKey, chatModel, thinkingModel, shrinkThink, systemPrompt, updateDelay, false, "bing");
+        this(baseUrl, apiKey, chatModel, thinkingModel, shrinkThink, systemPrompt, updateDelay, false, "bing", true);
     }
 
-    public Config(String baseUrl, String apiKey, String chatModel, String thinkingModel, boolean shrinkThink, String systemPrompt, int updateDelay, boolean webSearchEnabled, String searchEngine) {
+    public Config(String baseUrl, String apiKey, String chatModel, String thinkingModel, boolean shrinkThink, String systemPrompt, int updateDelay, boolean webSearchEnabled, String searchEngine, boolean webFetchEnabled) {
         this.baseUrl = baseUrl;
         this.apiKey = apiKey;
         this.chatModel = chatModel;
@@ -27,6 +28,7 @@ public class Config {
         this.updateDelay = updateDelay;
         this.webSearchEnabled = webSearchEnabled;
         this.searchEngine = searchEngine;
+        this.webFetchEnabled = webFetchEnabled;
     }
 
     public String getBaseUrl() { return baseUrl; }
@@ -52,6 +54,9 @@ public class Config {
 
     public boolean isWebSearchEnabled() { return webSearchEnabled; }
     public void setWebSearchEnabled(boolean webSearchEnabled) { this.webSearchEnabled = webSearchEnabled; }
+
+    public boolean isWebFetchEnabled() { return webFetchEnabled; }
+    public void setWebFetchEnabled(boolean webFetchEnabled) { this.webFetchEnabled = webFetchEnabled; }
 
     public String getSearchEngine() { return searchEngine; }
     public void setSearchEngine(String searchEngine) { this.searchEngine = searchEngine; }

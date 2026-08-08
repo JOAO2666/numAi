@@ -66,6 +66,7 @@ public class MainActivity extends Activity {
     private ConfigManager config;
 
     private ListView msgList;
+    private View helloLayout;
     private EditText input;
     private MessageAdapter adapter;
     private ImageButton sendBtn;
@@ -109,6 +110,7 @@ public class MainActivity extends Activity {
 
         apiService = new ApiService(this);
         msgList = (ListView) findViewById(R.id.messages_list);
+        helloLayout = findViewById(R.id.hello_layout);
         input = (EditText) findViewById(R.id.message_input);
         sendBtn = (ImageButton) findViewById(R.id.send_button);
         attachBtn = (ImageButton) findViewById(R.id.attach_button);
@@ -137,6 +139,7 @@ public class MainActivity extends Activity {
         adapter = new MessageAdapter(this, MessageManager.getInstance().getMessages());
         msgList.setAdapter(adapter);
         scrollToBottom();
+        updateEmptyState();
 
         if (config.getConfig().getShrinkThink()) {
             LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) thinkingToggle.getLayoutParams();
@@ -291,6 +294,13 @@ public class MainActivity extends Activity {
         adapter = new MessageAdapter(this, MessageManager.getInstance().getMessages());
         msgList.setAdapter(adapter);
         scrollToBottom();
+        updateEmptyState();
+    }
+
+    private void updateEmptyState() {
+        boolean hasMessages = adapter.getCount() > 0;
+        helloLayout.setVisibility(hasMessages ? View.GONE : View.VISIBLE);
+        msgList.setVisibility(hasMessages ? View.VISIBLE : View.GONE);
     }
 
     @Override
@@ -354,6 +364,7 @@ public class MainActivity extends Activity {
         runOnUiThread(new Runnable() {
             public void run() {
                 adapter.notifyDataSetChanged();
+                updateEmptyState();
             }
         });
     }
@@ -375,6 +386,7 @@ public class MainActivity extends Activity {
         inputImages.clear();
         imgCount.setVisibility(View.GONE);
         adapter.notifyDataSetChanged();
+        updateEmptyState();
         scrollToBottom();
 
         requestAICompletion();
@@ -416,6 +428,7 @@ public class MainActivity extends Activity {
         MessageManager.getInstance().addMessage(msg);
         ChatManager.getInstance().onMessageAdded(this);
         adapter.notifyDataSetChanged();
+        updateEmptyState();
         new Thread(new Runnable() {
             public void run() {
                 try {
@@ -442,6 +455,7 @@ public class MainActivity extends Activity {
     private void resetUIState() {
         isGenerating = false;
         adapter.notifyDataSetChanged();
+        updateEmptyState();
         autoScroll = true;
         scrollToBottom();
         sendBtn.setImageResource(android.R.drawable.ic_menu_send);

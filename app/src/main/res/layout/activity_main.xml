@@ -19,6 +19,34 @@
         tools:listheader="@layout/message_sent"
         tools:listitem="@layout/message_received"/>
 
+    <FrameLayout
+        android:id="@+id/hello_layout"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:layout_above="@+id/input_layout">
+        <LinearLayout
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/hello_user"
+                android:gravity="center"
+                android:textStyle="bold"
+                android:textSize="20sp"
+                android:paddingBottom="6dp"/>
+            <ImageView
+                android:layout_width="130dp"
+                android:layout_height="130dp"
+                android:src="@drawable/bugdroid"
+                android:layout_gravity="center"
+                android:paddingBottom="16dp"
+                android:id="@+id/bugdroid"/>
+        </LinearLayout>
+    </FrameLayout>
+
     <LinearLayout
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"

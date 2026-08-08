@@ -87,58 +87,62 @@ public class ApiService {
                     body.put("messages", messages);
                     body.put("stream", true);
 
-                    if (config.getConfig().isWebSearchEnabled()) {
+                    if (config.getConfig().isWebSearchEnabled() || config.getConfig().isWebFetchEnabled()) {
                         JSONArray tools = new JSONArray();
 
-                        JSONObject tool = new JSONObject();
-                        tool.put("type", "function");
+                        if (config.getConfig().isWebSearchEnabled()) {
+                            JSONObject tool = new JSONObject();
+                            tool.put("type", "function");
 
-                        JSONObject function = new JSONObject();
-                        function.put("name", "web_search");
-                        function.put("description", "Mandatory tool to fetch real-time facts, tech tutorials, and software compatibility info. Must be executed prior to answering any factual or technical user query.");
+                            JSONObject function = new JSONObject();
+                            function.put("name", "web_search");
+                            function.put("description", "Mandatory tool to fetch real-time facts, tech tutorials, and software compatibility info. Must be executed prior to answering any factual or technical user query.");
 
-                        JSONObject parameters = new JSONObject();
-                        parameters.put("type", "object");
+                            JSONObject parameters = new JSONObject();
+                            parameters.put("type", "object");
 
-                        JSONObject properties = new JSONObject();
-                        JSONObject queryProp = new JSONObject();
-                        queryProp.put("type", "string");
-                        queryProp.put("description", "Search query keywords");
-                        properties.put("query", queryProp);
+                            JSONObject properties = new JSONObject();
+                            JSONObject queryProp = new JSONObject();
+                            queryProp.put("type", "string");
+                            queryProp.put("description", "Search query keywords");
+                            properties.put("query", queryProp);
 
-                        parameters.put("properties", properties);
-                        JSONArray required = new JSONArray();
-                        required.add("query");
-                        parameters.put("required", required);
+                            parameters.put("properties", properties);
+                            JSONArray required = new JSONArray();
+                            required.add("query");
+                            parameters.put("required", required);
 
-                        function.put("parameters", parameters);
-                        tool.put("function", function);
-                        tools.add(tool);
+                            function.put("parameters", parameters);
+                            tool.put("function", function);
+                            tools.add(tool);
+                        }
 
-                        JSONObject fetchTool = new JSONObject();
-                        fetchTool.put("type", "function");
+                        if (config.getConfig().isWebFetchEnabled()) {
+                            JSONObject fetchTool = new JSONObject();
+                            fetchTool.put("type", "function");
 
-                        JSONObject fetchFunction = new JSONObject();
-                        fetchFunction.put("name", "web_fetch");
-                        fetchFunction.put("description", "Fetches and extracts full text content from a target web page URL as clean Markdown to read articles, documentation, or news.");
+                            JSONObject fetchFunction = new JSONObject();
+                            fetchFunction.put("name", "web_fetch");
+                            fetchFunction.put("description", "Fetches and extracts full text content from a target web page URL as clean Markdown to read articles, documentation, or news.");
 
-                        JSONObject fetchParams = new JSONObject();
-                        fetchParams.put("type", "object");
+                            JSONObject fetchParams = new JSONObject();
+                            fetchParams.put("type", "object");
 
-                        JSONObject fetchProps = new JSONObject();
-                        JSONObject urlProp = new JSONObject();
-                        urlProp.put("type", "string");
-                        urlProp.put("description", "Target URL to fetch and read");
-                        fetchProps.put("url", urlProp);
+                            JSONObject fetchProps = new JSONObject();
+                            JSONObject urlProp = new JSONObject();
+                            urlProp.put("type", "string");
+                            urlProp.put("description", "Target URL to fetch and read");
+                            fetchProps.put("url", urlProp);
 
-                        fetchParams.put("properties", fetchProps);
-                        JSONArray fetchRequired = new JSONArray();
-                        fetchRequired.add("url");
-                        fetchParams.put("required", fetchRequired);
+                            fetchParams.put("properties", fetchProps);
+                            JSONArray fetchRequired = new JSONArray();
+                            fetchRequired.add("url");
+                            fetchParams.put("required", fetchRequired);
 
-                        fetchFunction.put("parameters", fetchParams);
-                        fetchTool.put("function", fetchFunction);
-                        tools.add(fetchTool);
+                            fetchFunction.put("parameters", fetchParams);
+                            fetchTool.put("function", fetchFunction);
+                            tools.add(fetchTool);
+                        }
 
                         body.put("tools", tools);
                     }

@@ -47,6 +47,7 @@
     </plurals>
     <string name="reading_sources">Чтение источников</string>
     <string name="web_search">Включить веб-поиск (Bing)</string>
+    <string name="web_fetch">Включить веб-загрузку</string>
     <string name="generating_table">Генерация таблицы…</string>
     <string name="new_chat">+ Создать чат</string>
     <string name="open">Открыть</string>

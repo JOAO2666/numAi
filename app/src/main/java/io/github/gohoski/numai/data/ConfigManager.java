@@ -15,6 +15,7 @@ public class ConfigManager {
             KEY_SYSTEM_PROMPT = "systemPrompt",
             KEY_UPDATE_DELAY = "updateDelay",
             KEY_WEB_SEARCH_ENABLED = "webSearchEnabled",
+            KEY_WEB_FETCH_ENABLED = "webFetchEnabled",
             KEY_SEARCH_ENGINE = "searchEngine";
 
     private static ConfigManager instance;
@@ -47,7 +48,8 @@ public class ConfigManager {
                 preferences.getString(KEY_SYSTEM_PROMPT, ""),
                 preferences.getInt(KEY_UPDATE_DELAY, 250),
                 preferences.getBoolean(KEY_WEB_SEARCH_ENABLED, true),
-                preferences.getString(KEY_SEARCH_ENGINE, "bing"));
+                preferences.getString(KEY_SEARCH_ENGINE, "bing"),
+                preferences.getBoolean(KEY_WEB_FETCH_ENABLED, true));
     }
 
     private void saveConfig() {
@@ -60,6 +62,7 @@ public class ConfigManager {
         editor.putString(KEY_SYSTEM_PROMPT, config.getSystemPrompt());
         editor.putInt(KEY_UPDATE_DELAY, config.getUpdateDelay());
         editor.putBoolean(KEY_WEB_SEARCH_ENABLED, config.isWebSearchEnabled());
+        editor.putBoolean(KEY_WEB_FETCH_ENABLED, config.isWebFetchEnabled());
         editor.putString(KEY_SEARCH_ENGINE, config.getSearchEngine());
         editor.commit();
     }
