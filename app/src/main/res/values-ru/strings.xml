@@ -14,7 +14,7 @@
     <string name="errorNetwork">Ошибка сети: %s</string>
     <string name="firsttime_1">numAi позволяет использовать современные нейросети (ChatGPT, DeepSeek, Gemini и др.) на вашем старом андроиде.\n\nДля начала вам понадобится API-ключ. Это приложение поможет вам его получить. Всё, что нужно — это современный смартфон или компьютер.\n\nВ инструкции будет использован бесплатный провайдер VoidAI. Если у вас уже есть ключ или вы используете другого провайдера, нажмите «Пропустить».</string>
     <string name="from_file">Из файла</string>
-    <string name="hello_user">Привет, юзер</string>
+    <string name="hello_user">Привет, пользователь</string>
     <string name="loading">Загрузка</string>
     <string name="next">&gt; Далее</string>
     <string name="settings">Настройки</string>
@@ -43,7 +43,7 @@
         <item quantity="one">%d результат</item>
         <item quantity="few">%d результата</item>
         <item quantity="many">%d результатов</item>
-        <item quantity="other">%d результата</item>
+        <item quantity="other">%d результатов</item>
     </plurals>
     <string name="reading_sources">Чтение источников</string>
     <string name="web_search">Включить веб-поиск (Bing)</string>

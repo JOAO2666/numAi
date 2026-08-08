@@ -30,6 +30,7 @@ public class ApiClient {
     public ApiResponse execute(ApiRequest request) throws ApiError {
         HttpURLConnection connection = null;
         InputStream inputStream = null;
+
         try {
             String baseUrl = request.getBaseUrl();
             String apiKey = null;
@@ -144,6 +145,7 @@ public class ApiClient {
             }
 
             throw new ApiError("Too many redirects");
+
         } catch (IOException e) {
             e.printStackTrace();
             if (inputStream != null) {

@@ -7,23 +7,32 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
+import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Looper;
 import android.text.ClipboardManager;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
 import android.text.method.LinkMovementMethod;
+import android.text.style.URLSpan;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.View.OnClickListener;
+import android.view.ViewGroup;
 import android.widget.AbsListView;
 import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ToggleButton;
@@ -236,8 +245,74 @@ public class MainActivity extends Activity {
                 startActivity(new Intent(this, SettingsActivity.class));
                 finish();
                 return true;
+            case R.id.exit:
+                isCancelled = true;
+                if (currentStream != null) {
+                    try {
+                        currentStream.close();
+                    } catch (IOException ignored) {}
+                }
+                android.os.Process.killProcess(android.os.Process.myPid());
+                return true;
             case R.id.about:
-                Toast.makeText(this, "numAi " + BuildConfig.VERSION_NAME + " (" + BuildConfig.BUILD_TYPE + ") \u25b6\ngithub.com/gohoski/numAi", Toast.LENGTH_SHORT).show();
+                LinearLayout layout = new LinearLayout(this);
+                layout.setOrientation(LinearLayout.VERTICAL);
+                layout.setPadding(15, 15, 15, 15);
+
+                final TextView app = new TextView(this);
+                app.setText(getString(R.string.app_name) + " " + BuildConfig.VERSION_NAME);
+                app.setTypeface(null, Typeface.BOLD);
+                app.setTextSize(20);
+                app.setGravity(Gravity.CENTER_HORIZONTAL);
+                layout.addView(app);
+
+                final ImageView imageView = new ImageView(this);
+                imageView.setLayoutParams(new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.FILL_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                ));
+                imageView.setImageResource(R.drawable.main_icon);
+                layout.addView(imageView);
+
+                final TextView text = new TextView(this);
+                String ccLicense = getString(R.string.about_cc);
+                SpannableStringBuilder sb = new SpannableStringBuilder(
+                        getString(R.string.about_, ccLicense) + "\n\nMIT License\n" +
+                        "\n" +
+                        "Copyright (c) 2021-2026 Arman Jussupgaliyev\n" +
+                        "\n" +
+                        "Permission is hereby granted, free of charge, to any person obtaining a copy\n" +
+                        "of this software and associated documentation files (the \"Software\"), to deal\n" +
+                        "in the Software without restriction, including without limitation the rights\n" +
+                        "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n" +
+                        "copies of the Software, and to permit persons to whom the Software is\n" +
+                        "furnished to do so, subject to the following conditions:\n" +
+                        "\n" +
+                        "The above copyright notice and this permission notice shall be included in all\n" +
+                        "copies or substantial portions of the Software.\n" +
+                        "\n" +
+                        "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n" +
+                        "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n" +
+                        "FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n" +
+                        "AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n" +
+                        "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n" +
+                        "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n" +
+                        "SOFTWARE.");
+                int linkStart = sb.toString().indexOf(ccLicense);
+                if (linkStart >= 0)
+                    sb.setSpan(new URLSpan("https://creativecommons.org/licenses/by/3.0/"),
+                            linkStart, linkStart + ccLicense.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                text.setText(sb);
+                text.setMovementMethod(LinkMovementMethod.getInstance());
+                layout.addView(text);
+
+                ScrollView scrollView = new ScrollView(this);
+                scrollView.addView(layout);
+
+                new android.app.AlertDialog.Builder(this)
+                        .setTitle(R.string.about)
+                        .setView(scrollView)
+                        .setNeutralButton(android.R.string.ok, null).show();
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
@@ -281,11 +356,25 @@ public class MainActivity extends Activity {
                             ChatManager.getInstance().setCurrentChat(MainActivity.this, chat);
                             refreshMessageAdapter();
                         } else if (which == 1) {
-                            ChatManager.getInstance().deleteChat(MainActivity.this, chat);
-                            refreshMessageAdapter();
+                            confirmDeleteChat(chat);
                         }
                     }
                 })
+                .show();
+    }
+
+    private void confirmDeleteChat(final Chat chat) {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.delete_chat_title)
+                .setMessage(getString(R.string.delete_chat_message, chat.getTitle()))
+                .setPositiveButton(R.string.delete, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        ChatManager.getInstance().deleteChat(MainActivity.this, chat);
+                        refreshMessageAdapter();
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
                 .show();
     }
 
@@ -325,7 +414,7 @@ public class MainActivity extends Activity {
             }
         } catch (Exception e) {
             e.printStackTrace();
-            Toast.makeText(this, "Failed to load image", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.image_fail, Toast.LENGTH_SHORT).show();
         }
     }
 

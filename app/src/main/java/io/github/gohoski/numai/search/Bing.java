@@ -615,9 +615,6 @@ class Bing implements SearchEngine {
         return "";
     }
 
-    /**
-     * Replicates Python's BeautifulSoup logic: `h2.find("a") or h2.find_parent("a")`
-     */
     private static String extractUrl(HtmlParser.Node algoNode) {
         HtmlParser.Node h2Node = findNodeByTag(algoNode, "h2");
         if (h2Node != null) {

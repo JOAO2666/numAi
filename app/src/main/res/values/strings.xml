@@ -3,7 +3,7 @@
     <string name="ask_anything">Ask anything</string>
     <string name="thinking">Thinking</string>
     <string name="api_key">API key</string>
-    <string name="errorNetwork">Network error: %s</string>
+    <string name="errorNetwork">Network error: %s\n\nTurn on Wolfius, press Menu &gt; Exit and try again</string>
     <string name="error">Error: </string>
     <string name="settings">Settings</string>
     <string name="back">&lt; Back</string>
@@ -42,6 +42,8 @@
     <string name="new_chat">+ New Chat</string>
     <string name="open">Open</string>
     <string name="delete">Delete</string>
+    <string name="delete_chat_title">Delete chat</string>
+    <string name="delete_chat_message">Delete \"%s\"? This cannot be undone.</string>
     <plurals name="results">
         <item quantity="one">%d result</item>
         <item quantity="other">%d results</item>
@@ -54,6 +56,10 @@
     <string name="recommended">%s (Recommended)</string>
     <string name="guide_voidai">Android 1.6+. For Android &lt;3.0, <b>Wolfius</b> is required: github.com/gohoski/Wolfius\n\n1. On a modern browser, go to <b>voidai.app/register</b> and create an account.\nIf you use Gmail, enter your email without the dots before @gmail.com.\n2. After logging in, navigate to the <b>API Keys</b> section in your dashboard.\n3. Click <b>Generate New API Key</b>.\n4. Copy the key that appears and transfer it to your device using one of these methods:</string>
     <string name="guide_ollama_cloud">This API supports Android 1.0+ out of the box, but provides very few free models.\n\n1. On a modern browser, go to <b>signin.ollama.com/sign-up</b> and create an account.\n2. After logging in, go to <b>Settings &gt; Keys</b>.\n3. Click <b>Add API Key</b>, then <b>Generate API Key</b>.\n4. Copy the key that appears and transfer it to your device using one of these methods:</string>
-    <string name="guide_opencode_zen">Android 1.6+. For Android &lt;4.4, it is required to setup <b>Wolfius</b> for connectivity: github.com/gohoski/Wolfius\n\n1. On a modern browser, go to <b>opencode.ai/auth</b> and create an account.\n2. After logging in, navigate to the <b>API Keys</b> section in your dashboard.\n3. Click <b>Create API Key</b> and enter any key name.\n4. Copy the key that appears and transfer it to your device using one of these methods:</string>
+    <string name="guide_opencode_zen">Android 1.6+. For Android &lt;4.4, <b>Wolfius</b> is required: github.com/gohoski/Wolfius\n\n1. On a modern browser, go to <b>opencode.ai/auth</b> and create an account.\n2. After logging in, navigate to the <b>API Keys</b> section in your dashboard.\n3. Click <b>Create API Key</b> and enter any key name.\n4. Copy the key that appears and transfer it to your device using one of these methods:</string>
     <string name="copy_key">\n<b>Method 1: File transfer</b>\n• Create a text file with only the API key and save it.\n• Transfer the file to your phone via USB, Bluetooth or similar.\n• You will be able to import the key from the file on the next screen.\n\n<b>Method 2: adb</b>\n• On the <b>next screen</b>, press on the text input box, and paste the key using this command:\n<b>adb shell input text "API KEY"</b></string>
+    <string name="about_">An AI app for Android 1.0+ with support for deep thinking, image vision, and web search. ChatGPT, DeepSeek, Gemini and more for legacy Android.\n▶ github.com/gohoski/numAi\n▶ t.me/AppDataApps\n\nLicensed under the WTFPL. See www.wtfpl.net for more details.\nThe Android robot is reproduced or modified from work created and shared by Google and used according to terms described in the %1$s Attribution License.\nThe NNJSON library used in this project is licensed under the MIT License provided below.</string>
+    <string name="about_cc">Creative Commons 3.0</string>
+    <string name="image_fail">Failed to load image</string>
+    <string name="exit">Exit</string>
 </resources>
