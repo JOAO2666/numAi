@@ -93,20 +93,83 @@ public class ChatManager {
         if (currentChat == chat) {
             startNewChat();
         }
+
+        // Delete associated image files from internal storage
+        if (chat.getMessages() != null) {
+            for (Message msg : chat.getMessages()) {
+                List<String> images = msg.getInputImages();
+                if (images != null) {
+                    for (String fileName : images) {
+                        if (!fileName.startsWith("data:image")) {
+                            context.deleteFile(fileName);
+                        }
+                    }
+                }
+            }
+        }
+
         if (chat.getId() != null) {
             context.deleteFile(chatFileName(chat));
         }
         saveChats(context);
     }
 
+    public void cleanupOrphanedImages(Context context) {
+        final Context ctx = context;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                java.util.Set<String> referencedFiles = new java.util.HashSet<String>();
+
+                // Gather all image filenames across all chats
+                for (Chat chat : chats) {
+                    for (Message msg : chat.getMessages()) {
+                        if (msg.getInputImages() != null) {
+                            for (String img : msg.getInputImages()) {
+                                if (!img.startsWith("data:image")) {
+                                    referencedFiles.add(img);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // List all files in internal directory and delete unreferenced images
+                String[] files = ctx.fileList();
+                if (files != null) {
+                    for (String file : files) {
+                        if (file.startsWith("img_") && file.endsWith(".jpg")) {
+                            if (!referencedFiles.contains(file)) {
+                                ctx.deleteFile(file);
+                            }
+                        }
+                    }
+                }
+            }
+        }).start();
+    }
+
     public void saveChat(Context context, Chat chat) {
         if (chat == null || chat.getId() == null) return;
+        String finalFileName = chatFileName(chat);
+        String tempFileName = finalFileName + ".tmp";
+        FileOutputStream fos;
         try {
-            FileOutputStream fos = context.openFileOutput(chatFileName(chat), Context.MODE_PRIVATE);
+            // Write to temporary file
+            fos = context.openFileOutput(tempFileName, Context.MODE_PRIVATE);
             fos.write(chat.toJSONObject().build().getBytes("UTF-8"));
+            fos.flush();
             fos.close();
+            // Safely replace original file only if write was 100% successful
+            java.io.File tempFile = context.getFileStreamPath(tempFileName);
+            java.io.File finalFile = context.getFileStreamPath(finalFileName);
+            if (tempFile.exists()) {
+                tempFile.renameTo(finalFile);
+            }
         } catch (Exception e) {
             e.printStackTrace();
+            // Delete temp file if write failed due to full disk
+            context.deleteFile(tempFileName);
         }
     }
 

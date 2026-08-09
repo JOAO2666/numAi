@@ -4,6 +4,8 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 
+import java.io.ByteArrayOutputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,6 +17,7 @@ import io.github.gohoski.numai.R;
 import io.github.gohoski.numai.data.ConfigManager;
 import io.github.gohoski.numai.model.Message;
 import io.github.gohoski.numai.model.Role;
+import io.github.gohoski.numai.util.Base64;
 
 public class ApiService {
     private final ApiClient apiClient;
@@ -175,7 +178,7 @@ public class ApiService {
                         String errorBody = "no body";
                         try {
                             errorBody = apiClient.readInputStreamToString(response.getBody());
-                        } catch(IOException ignored) {}
+                        } catch (Exception ignored) {}
                         deliverError(callback, new ApiError(ctx.getString(hasImg ? R.string.fail_send_vision : R.string.fail_send, response.getStatusCode() + " " + errorBody)));
                     }
                 } catch (ApiError e) {
@@ -233,5 +236,27 @@ public class ApiService {
                 callback.onError(error);
             }
         });
+    }
+
+    public static String getBase64FromFilename(Context context, String fileName) {
+        if (fileName.startsWith("data:image")) return fileName;
+        FileInputStream fis = null;
+        try {
+            fis = context.openFileInput(fileName);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            int len;
+            while ((len = fis.read(buffer)) != -1) {
+                baos.write(buffer, 0, len);
+            }
+            return "data:image/jpeg;base64," + Base64.encode(baos.toByteArray());
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        } finally {
+            if (fis != null) {
+                try { fis.close(); } catch (IOException ignored) {}
+            }
+        }
     }
 }

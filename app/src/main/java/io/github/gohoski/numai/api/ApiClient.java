@@ -185,14 +185,14 @@ public class ApiClient {
             while ((bytesRead = inputStream.read(buffer)) != -1) {
                 outputStream.write(buffer, 0, bytesRead);
             }
+            return outputStream.toString("UTF-8");
         } finally {
-            outputStream.close();
-            if (inputStream != null) {
-                try {
-                    inputStream.close();
-                } catch (IOException ignored) {}
-            }
+            try {
+                outputStream.close();
+            } catch (IOException ignored) {}
+            try {
+                inputStream.close();
+            } catch (IOException ignored) {}
         }
-        return outputStream.toString("UTF-8");
     }
 }

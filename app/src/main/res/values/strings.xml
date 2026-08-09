@@ -9,7 +9,7 @@
     <string name="back">&lt; Back</string>
     <string name="next">&gt; Next</string>
     <string name="skip">^ Skip</string>
-    <string name="firsttime">numAi brings modern LLMs (ChatGPT, DeepSeek, Gemini and more) to your old Android device.\n\nTo start, you\'ll need an API key. This app will guide you through the process. All you need is a modern smartphone or PC.\n\nHit Next to continue!</string>
+    <string name="firsttime">numAi brings modern LLMs (ChatGPT, DeepSeek, Gemini and more) to your old Android device.\n\nTo start, you\'ll need an API key. This app will guide you through the process. All you need is a modern smartphone or PC.\n\nIf you already have an API key from an OpenAI-compatible provider, click Skip.\n\nHit Next to continue!</string>
     <string name="hello_user">Hello, User</string>
     <string name="loading">Loading</string>
     <string name="api_key_setup">API key setup</string>
@@ -32,7 +32,7 @@
     <string name="text_copied">Text copied to clipboard</string>
     <string name="bad_url">Incorrect URL!</string>
     <string name="fail_send">Failed to send message:\n%s</string>
-    <string name="fail_send_vision">Failed to send message:\n%s\n\n<b>For image perception support, change the model to Gemma, Gemini, Qwen, GPT or Kimi!</b></string>
+    <string name="fail_send_vision">Failed to send message:\n%s\n\n<b>For image perception support, change the model to Gemma, Gemini, Qwen, GPT, or Kimi.</b></string>
     <string name="update_delay">UI update delay in milliseconds</string>
     <string name="select_picture">Attach an image</string>
     <string name="select_txt">Select file</string>
@@ -55,11 +55,11 @@
     <string name="generating_table">Generating table…</string>
     <string name="recommended">%s (Recommended)</string>
     <string name="guide_voidai">Android 1.6+. For Android &lt;3.0, <b>Wolfius</b> is required: github.com/gohoski/Wolfius\n\n1. On a modern browser, go to <b>voidai.app/register</b> and create an account.\nIf you use Gmail, enter your email without the dots before @gmail.com.\n2. After logging in, navigate to the <b>API Keys</b> section in your dashboard.\n3. Click <b>Generate New API Key</b>.\n4. Copy the key that appears and transfer it to your device using one of these methods:</string>
-    <string name="guide_ollama_cloud">This API supports Android 1.0+ out of the box, but provides very few free models.\n\n1. On a modern browser, go to <b>signin.ollama.com/sign-up</b> and create an account.\n2. After logging in, go to <b>Settings &gt; Keys</b>.\n3. Click <b>Add API Key</b>, then <b>Generate API Key</b>.\n4. Copy the key that appears and transfer it to your device using one of these methods:</string>
+    <string name="guide_ollama_cloud">This API supports Android 1.0+ out of the box, but provides few free models.\n\n1. On a modern browser, go to <b>ollama.com</b> and create an account.\n2. After logging in, go to <b>Settings &gt; Keys</b>.\n3. Click <b>Add API Key</b>, then <b>Generate API Key</b>.\n4. Copy the key that appears and transfer it to your device using one of these methods:</string>
     <string name="guide_opencode_zen">Android 1.6+. For Android &lt;4.4, <b>Wolfius</b> is required: github.com/gohoski/Wolfius\n\n1. On a modern browser, go to <b>opencode.ai/auth</b> and create an account.\n2. After logging in, navigate to the <b>API Keys</b> section in your dashboard.\n3. Click <b>Create API Key</b> and enter any key name.\n4. Copy the key that appears and transfer it to your device using one of these methods:</string>
-    <string name="copy_key">\n<b>Method 1: File transfer</b>\n• Create a text file with only the API key and save it.\n• Transfer the file to your phone via USB, Bluetooth or similar.\n• You will be able to import the key from the file on the next screen.\n\n<b>Method 2: adb</b>\n• On the <b>next screen</b>, press on the text input box, and paste the key using this command:\n<b>adb shell input text "API KEY"</b></string>
+    <string name="copy_key">\n<b>Method 1: File transfer</b>\n• Create a text file with only the API key and save it.\n• Transfer the file to your phone via USB, Bluetooth or similar.\n• You will be able to import the key from the file on the next screen.\n\n<b>Method 2: adb</b>\n• On the <b>next screen</b>, press on the text input box, and paste the key using this command:\n<b>adb shell input text \"API KEY\"</b></string>
     <string name="about_">An AI app for Android 1.0+ with support for deep thinking, image vision, and web search. ChatGPT, DeepSeek, Gemini and more for legacy Android.\n▶ github.com/gohoski/numAi\n▶ t.me/AppDataApps\n\nLicensed under the WTFPL. See www.wtfpl.net for more details.\nThe Android robot is reproduced or modified from work created and shared by Google and used according to terms described in the %1$s Attribution License.\nThe NNJSON library used in this project is licensed under the MIT License provided below.</string>
     <string name="about_cc">Creative Commons 3.0</string>
-    <string name="image_fail">Failed to load image</string>
+    <string name="space_fail">There may be not enough storage space left. Please try deleting old chats and try again.</string>
     <string name="exit">Exit</string>
 </resources>

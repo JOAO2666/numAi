@@ -39,6 +39,7 @@ import android.widget.ToggleButton;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -402,21 +403,31 @@ public class MainActivity extends Activity {
     }
 
     private void processSelectedImage(Uri uri) {
+        String fileName = "img_" + System.currentTimeMillis() + ".jpg";
+        FileOutputStream fos = null;
+        boolean success = false;
         try {
             Bitmap bitmap = decodeSampledBitmap(this, uri, 1080, 1080);
             if (bitmap != null) {
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 80, baos);
-                byte[] bytes = baos.toByteArray();
+                fos = openFileOutput(fileName, Context.MODE_PRIVATE);
+                success = bitmap.compress(Bitmap.CompressFormat.JPEG, 75, fos);
                 bitmap.recycle();
-
-                inputImages.add("data:image/jpeg;base64," + Base64.encode(bytes));
-                imgCount.setVisibility(View.VISIBLE);
-                imgCount.setText(String.valueOf(inputImages.size()));
             }
         } catch (Exception e) {
             e.printStackTrace();
-            Toast.makeText(this, R.string.image_fail, Toast.LENGTH_SHORT).show();
+        } finally {
+            if (fos != null) {
+                try { fos.close(); } catch (IOException ignored) {}
+            }
+        }
+
+        if (success) {
+            inputImages.add(fileName);
+            imgCount.setVisibility(View.VISIBLE);
+            imgCount.setText(String.valueOf(inputImages.size()));
+        } else {
+            deleteFile(fileName);
+            Toast.makeText(this, R.string.space_fail, Toast.LENGTH_SHORT).show();
         }
     }
 

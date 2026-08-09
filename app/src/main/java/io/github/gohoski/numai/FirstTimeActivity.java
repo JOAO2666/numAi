@@ -1,9 +1,7 @@
 package io.github.gohoski.numai;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -57,6 +55,8 @@ public class FirstTimeActivity extends Activity {
     private Spinner providerKeySpinner;
     private EditText keyText;
 
+    private boolean modelsLoaded = false;
+
     private final List<String> rawProviderNames = new ArrayList<String>();
     private final List<String> displayProviderNames = new ArrayList<String>();
     private final List<Integer> guideResources = new ArrayList<Integer>();
@@ -73,7 +73,46 @@ public class FirstTimeActivity extends Activity {
 
         viewFlipper = (ViewFlipper) findViewById(R.id.view_flipper);
         setupNavigation();
+
+        if (savedInstanceState != null) {
+            if (savedInstanceState.containsKey("api_key")) {
+                apiKey = savedInstanceState.getString("api_key");
+                if (keyText != null) {
+                    keyText.setText(apiKey);
+                }
+            }
+            if (providerGuideSpinner != null && savedInstanceState.containsKey("guide_spinner_pos")) {
+                providerGuideSpinner.setSelection(savedInstanceState.getInt("guide_spinner_pos"));
+            }
+            if (providerKeySpinner != null && savedInstanceState.containsKey("key_spinner_pos")) {
+                providerKeySpinner.setSelection(savedInstanceState.getInt("key_spinner_pos"));
+            }
+            modelsLoaded = savedInstanceState.getBoolean("models_loaded", false);
+            if (savedInstanceState.containsKey("displayed_child")) {
+                int child = savedInstanceState.getInt("displayed_child");
+                viewFlipper.setDisplayedChild(child);
+            }
+        }
+
         runScreenSpecificCode();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (viewFlipper != null) {
+            outState.putInt("displayed_child", viewFlipper.getDisplayedChild());
+        }
+        if (keyText != null) {
+            outState.putString("api_key", keyText.getText().toString());
+        }
+        if (providerGuideSpinner != null) {
+            outState.putInt("guide_spinner_pos", providerGuideSpinner.getSelectedItemPosition());
+        }
+        if (providerKeySpinner != null) {
+            outState.putInt("key_spinner_pos", providerKeySpinner.getSelectedItemPosition());
+        }
+        outState.putBoolean("models_loaded", modelsLoaded);
     }
 
     private int getSdkVersion() {
@@ -272,57 +311,88 @@ public class FirstTimeActivity extends Activity {
             case 2:
                 break;
             case 3:
-                apiConfig.updateApiKey(apiKey);
-                apiConfig.updateBaseUrl(ApiManager.getUrlByName(providerKeySpinner.getSelectedItem().toString()));
-                apiService.getModels(new ApiCallback<ArrayList<String>>() {
-                    @Override
-                    public void onSuccess(ArrayList<String> models) {
-                        try {
-                            apiConfig.updateChatModel(ModelSelector.selectChatModel(models));
-                            apiConfig.updateThinkingModel(ModelSelector.selectThinkingModel(models));
+                if (modelsLoaded) {
+                    ProgressBar loading = (ProgressBar) findViewById(R.id.progress_loader);
+                    if (loading != null) loading.setVisibility(View.GONE);
 
-                            ProgressBar loading = (ProgressBar) findViewById(R.id.progress_loader);
-                            loading.setVisibility(View.GONE);
+                    TextView title = (TextView) findViewById(R.id.title);
+                    if (title != null) {
+                        title.setText(R.string.hello_user);
+                        title.setTextSize(25f);
+                    }
+                    ImageView bugdroid = (ImageView) findViewById(R.id.bugdroid);
+                    if (bugdroid != null) bugdroid.setVisibility(View.VISIBLE);
 
-                            TextView title = (TextView) findViewById(R.id.title);
-                            title.setText(R.string.hello_user);
-                            title.setTextSize(25f);
-                            ImageView bugdroid = (ImageView) findViewById(R.id.bugdroid);
-                            bugdroid.setVisibility(View.VISIBLE);
+                    Button startButton = (Button) findViewById(R.id.startChatting);
+                    if (startButton != null) {
+                        startButton.setVisibility(View.VISIBLE);
+                        startButton.setOnClickListener(new View.OnClickListener() {
+                            @Override
+                            public void onClick(View view) {
+                                Intent intent = new Intent(context, MainActivity.class);
+                                startActivity(intent);
+                                finish();
+                            }
+                        });
+                    }
+                } else {
+                    apiConfig.updateApiKey(apiKey);
+                    apiConfig.updateBaseUrl(ApiManager.getUrlByName(providerKeySpinner.getSelectedItem().toString()));
+                    apiService.getModels(new ApiCallback<ArrayList<String>>() {
+                        @Override
+                        public void onSuccess(ArrayList<String> models) {
+                            try {
+                                modelsLoaded = true;
+                                apiConfig.updateChatModel(ModelSelector.selectChatModel(models));
+                                apiConfig.updateThinkingModel(ModelSelector.selectThinkingModel(models));
 
-                            new Handler().postDelayed(new Runnable() {
-                                @Override
-                                public void run() {
-                                    Button startButton = (Button) findViewById(R.id.startChatting);
-                                    Animation fadeIn = new AlphaAnimation(0.0f, 1.0f);
-                                    fadeIn.setDuration(1000);
-                                    fadeIn.setInterpolator(new AccelerateInterpolator());
-                                    startButton.setVisibility(View.VISIBLE);
-                                    startButton.startAnimation(fadeIn);
-                                    startButton.setOnClickListener(new View.OnClickListener() {
-                                        @Override
-                                        public void onClick(View view) {
-                                            Intent intent = new Intent(context, MainActivity.class);
-                                            startActivity(intent);
-                                            finish();
-                                        }
-                                    });
+                                ProgressBar loading = (ProgressBar) findViewById(R.id.progress_loader);
+                                if (loading != null) loading.setVisibility(View.GONE);
+
+                                TextView title = (TextView) findViewById(R.id.title);
+                                if (title != null) {
+                                    title.setText(R.string.hello_user);
+                                    title.setTextSize(25f);
                                 }
-                            }, 1000);
-                        } catch(Exception e) {
-                            e.printStackTrace();
-                            finish();
-                        }
-                    }
+                                ImageView bugdroid = (ImageView) findViewById(R.id.bugdroid);
+                                if (bugdroid != null) bugdroid.setVisibility(View.VISIBLE);
 
-                    @Override
-                    public void onError(ApiError error) {
-                        apiConfig.updateApiKey("");
-                        error.printStackTrace();
-                        Toast.makeText(context, getString(R.string.api_key_error) + " " + error.getMessage(), Toast.LENGTH_LONG).show();
-                        showPreviousScreen();
-                    }
-                });
+                                new Handler().postDelayed(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        Button startButton = (Button) findViewById(R.id.startChatting);
+                                        if (startButton != null) {
+                                            Animation fadeIn = new AlphaAnimation(0.0f, 1.0f);
+                                            fadeIn.setDuration(1000);
+                                            fadeIn.setInterpolator(new AccelerateInterpolator());
+                                            startButton.setVisibility(View.VISIBLE);
+                                            startButton.startAnimation(fadeIn);
+                                            startButton.setOnClickListener(new View.OnClickListener() {
+                                                @Override
+                                                public void onClick(View view) {
+                                                    Intent intent = new Intent(context, MainActivity.class);
+                                                    startActivity(intent);
+                                                    finish();
+                                                }
+                                            });
+                                        }
+                                    }
+                                }, 1000);
+                            } catch(Exception e) {
+                                e.printStackTrace();
+                                finish();
+                            }
+                        }
+
+                        @Override
+                        public void onError(ApiError error) {
+                            apiConfig.updateApiKey("");
+                            error.printStackTrace();
+                            Toast.makeText(context, getString(R.string.api_key_error) + " " + error.getMessage(), Toast.LENGTH_LONG).show();
+                            showPreviousScreen();
+                        }
+                    });
+                }
                 break;
         }
     }

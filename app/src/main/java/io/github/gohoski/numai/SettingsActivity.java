@@ -37,6 +37,7 @@ public class SettingsActivity extends Activity {
     Spinner apiSpinner, chatSpinner, thinkSpinner;
     EditText keyText;
     boolean fetched = false;
+    ArrayList<String> fetchedModels = null;
     CheckBox shrinkThink, webSearch, webFetch;
     String systemPrompt;
     EditText updateDelay;
@@ -65,6 +66,7 @@ public class SettingsActivity extends Activity {
             @Override
             public void onApiSelected(String api) {
                 fetched = false;
+                fetchedModels = null;
                 System.out.println(api);
             }
         });
@@ -120,6 +122,52 @@ public class SettingsActivity extends Activity {
 
         updateDelay = (EditText) findViewById(R.id.update_delay);
         updateDelay.setText(conf.getUpdateDelay()+"");
+
+        // Restore saved instance state on rotation
+        if (savedInstanceState != null) {
+            if (savedInstanceState.containsKey("api_key") && keyText != null) {
+                keyText.setText(savedInstanceState.getString("api_key"));
+            }
+            if (savedInstanceState.containsKey("system_prompt")) {
+                systemPrompt = savedInstanceState.getString("system_prompt");
+            }
+            if (savedInstanceState.containsKey("update_delay") && updateDelay != null) {
+                updateDelay.setText(savedInstanceState.getString("update_delay"));
+            }
+            if (savedInstanceState.containsKey("shrink_think") && shrinkThink != null) {
+                shrinkThink.setChecked(savedInstanceState.getBoolean("shrink_think"));
+            }
+            if (savedInstanceState.containsKey("web_search") && webSearch != null) {
+                webSearch.setChecked(savedInstanceState.getBoolean("web_search"));
+            }
+            if (savedInstanceState.containsKey("web_fetch") && webFetch != null) {
+                webFetch.setChecked(savedInstanceState.getBoolean("web_fetch"));
+            }
+            if (savedInstanceState.containsKey("api_spinner_pos") && apiSpinner != null) {
+                apiSpinner.setSelection(savedInstanceState.getInt("api_spinner_pos"));
+            }
+
+            fetched = savedInstanceState.getBoolean("fetched", false);
+            if (fetched && savedInstanceState.containsKey("fetched_models")) {
+                fetchedModels = savedInstanceState.getStringArrayList("fetched_models");
+                if (fetchedModels != null) {
+                    ArrayAdapter<String> fetchedAdapter = new ArrayAdapter<String>(
+                            context,
+                            android.R.layout.simple_spinner_item,
+                            fetchedModels
+                    );
+                    fetchedAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                    chatSpinner.setAdapter(fetchedAdapter);
+                    thinkSpinner.setAdapter(fetchedAdapter);
+                    if (savedInstanceState.containsKey("chat_spinner_pos")) {
+                        chatSpinner.setSelection(savedInstanceState.getInt("chat_spinner_pos"));
+                    }
+                    if (savedInstanceState.containsKey("think_spinner_pos")) {
+                        thinkSpinner.setSelection(savedInstanceState.getInt("think_spinner_pos"));
+                    }
+                }
+            }
+        }
 
         findViewById(R.id.ok).setOnClickListener(new View.OnClickListener() {
             @Override
@@ -214,6 +262,42 @@ public class SettingsActivity extends Activity {
     }
 
     @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (keyText != null) {
+            outState.putString("api_key", keyText.getText().toString());
+        }
+        if (systemPrompt != null) {
+            outState.putString("system_prompt", systemPrompt);
+        }
+        if (updateDelay != null) {
+            outState.putString("update_delay", updateDelay.getText().toString());
+        }
+        if (shrinkThink != null) {
+            outState.putBoolean("shrink_think", shrinkThink.isChecked());
+        }
+        if (webSearch != null) {
+            outState.putBoolean("web_search", webSearch.isChecked());
+        }
+        if (webFetch != null) {
+            outState.putBoolean("web_fetch", webFetch.isChecked());
+        }
+        if (apiSpinner != null) {
+            outState.putInt("api_spinner_pos", apiSpinner.getSelectedItemPosition());
+        }
+        outState.putBoolean("fetched", fetched);
+        if (fetched && fetchedModels != null) {
+            outState.putStringArrayList("fetched_models", fetchedModels);
+            if (chatSpinner != null) {
+                outState.putInt("chat_spinner_pos", chatSpinner.getSelectedItemPosition());
+            }
+            if (thinkSpinner != null) {
+                outState.putInt("think_spinner_pos", thinkSpinner.getSelectedItemPosition());
+            }
+        }
+    }
+
+    @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == 2 && resultCode == RESULT_OK && data != null) {
             Uri uri = data.getData();
@@ -239,6 +323,7 @@ public class SettingsActivity extends Activity {
         api.getModels(new ApiCallback<ArrayList<String>>() {
             @Override
             public void onSuccess(ArrayList<String> result) {
+                fetchedModels = result;
                 ArrayAdapter<String> adapter = new ArrayAdapter<String>(
                         context,
                         android.R.layout.simple_spinner_item,
