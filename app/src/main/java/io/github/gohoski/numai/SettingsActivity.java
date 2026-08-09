@@ -34,7 +34,7 @@ public class SettingsActivity extends Activity {
     Context context;
     ConfigManager config;
     ApiService api;
-    Spinner apiSpinner, chatSpinner, thinkSpinner;
+    Spinner apiSpinner, chatSpinner, thinkSpinner, searchEngineSpinner;
     EditText keyText;
     boolean fetched = false;
     ArrayList<String> fetchedModels = null;
@@ -120,6 +120,9 @@ public class SettingsActivity extends Activity {
         webFetch = (CheckBox) findViewById(R.id.webFetch);
         webFetch.setChecked(conf.isWebFetchEnabled());
 
+        searchEngineSpinner = (Spinner) findViewById(R.id.search_engine_spinner);
+        searchEngineSpinner.setSelection("duckduckgo".equalsIgnoreCase(conf.getSearchEngine()) ? 1 : 0);
+
         updateDelay = (EditText) findViewById(R.id.update_delay);
         updateDelay.setText(conf.getUpdateDelay()+"");
 
@@ -142,6 +145,9 @@ public class SettingsActivity extends Activity {
             }
             if (savedInstanceState.containsKey("web_fetch") && webFetch != null) {
                 webFetch.setChecked(savedInstanceState.getBoolean("web_fetch"));
+            }
+            if (savedInstanceState.containsKey("search_engine_pos") && searchEngineSpinner != null) {
+                searchEngineSpinner.setSelection(savedInstanceState.getInt("search_engine_pos"));
             }
             if (savedInstanceState.containsKey("api_spinner_pos") && apiSpinner != null) {
                 apiSpinner.setSelection(savedInstanceState.getInt("api_spinner_pos"));
@@ -182,7 +188,7 @@ public class SettingsActivity extends Activity {
                             systemPrompt,
                             Integer.parseInt(updateDelay.getText().toString()),
                             webSearch.isChecked(),
-                            conf.getSearchEngine(),
+                            searchEngineSpinner.getSelectedItem().toString().toLowerCase(),
                             webFetch.isChecked()));
                     Intent intent = new Intent(context, MainActivity.class);
                     startActivity(intent);
@@ -202,7 +208,7 @@ public class SettingsActivity extends Activity {
                                     systemPrompt,
                                     Integer.parseInt(updateDelay.getText().toString()),
                                     webSearch.isChecked(),
-                                    conf.getSearchEngine(),
+                                    searchEngineSpinner.getSelectedItem().toString().toLowerCase(),
                                     webFetch.isChecked()));
                             loading.dismiss();
                             Intent intent = new Intent(context, MainActivity.class);
@@ -281,6 +287,9 @@ public class SettingsActivity extends Activity {
         }
         if (webFetch != null) {
             outState.putBoolean("web_fetch", webFetch.isChecked());
+        }
+        if (searchEngineSpinner != null) {
+            outState.putInt("search_engine_pos", searchEngineSpinner.getSelectedItemPosition());
         }
         if (apiSpinner != null) {
             outState.putInt("api_spinner_pos", apiSpinner.getSelectedItemPosition());

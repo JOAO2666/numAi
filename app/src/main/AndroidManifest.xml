@@ -19,6 +19,8 @@
             </intent-filter>
         </activity>
         <activity android:name=".FirstTimeActivity"/>
-        <activity android:name=".SettingsActivity"/>
+        <activity
+            android:name=".SettingsActivity"
+            android:windowSoftInputMode="stateHidden"/>
     </application>
 </manifest>

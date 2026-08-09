@@ -49,8 +49,9 @@
         <item quantity="other">%d results</item>
     </plurals>
     <string name="reading_sources">Reading sources</string>
-    <string name="web_search">Enable web search (Bing)</string>
+    <string name="web_search">Enable web search</string>
     <string name="web_fetch">Enable web fetch</string>
+    <string name="web_fetch_">Web fetch allows the LLM to retrieve web pages by URL. Wolfius is required for this to work correctly on Android &lt;4.4, which is why this function is only recommended for Android 1.6+. Complex websites may not work.</string>
     <string name="view_table">View table</string>
     <string name="generating_table">Generating table…</string>
     <string name="recommended">%s (Recommended)</string>
@@ -62,4 +63,6 @@
     <string name="about_cc">Creative Commons 3.0</string>
     <string name="space_fail">There may be not enough storage space left. Please try deleting old chats and try again.</string>
     <string name="exit">Exit</string>
+    <string name="search_engine">Search engine</string>
+    <string name="search_engine_">Bing is supported on Android 1.0+. DuckDuckGo requires Wolfius for Android &lt;4.4 and can give more results, but may get limited.</string>
 </resources>

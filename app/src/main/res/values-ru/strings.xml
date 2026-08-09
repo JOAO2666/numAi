@@ -46,7 +46,8 @@
         <item quantity="other">%d результатов</item>
     </plurals>
     <string name="reading_sources">Чтение источников</string>
-    <string name="web_search">Включить веб-поиск (Bing)</string>
+    <string name="web_search">Включить веб-поиск</string>
+    <string name="search_engine">Поисковая система</string>
     <string name="web_fetch">Включить чтение веб-источников</string>
     <string name="generating_table">Генерация таблицы…</string>
     <string name="new_chat">+ Создать чат</string>
