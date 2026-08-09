@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2024-2025 Arman Jussupgaliyev
+Copyright (c) 2024-2026 Arman Jussupgaliyev
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -43,7 +43,7 @@ public class JSONStream {
 	private JSONStream() {}
 	
 	private void init(InputStream in) throws IOException {
-		reader = new InputStreamReader(in, "UTF-8");
+		reader = new InputStreamReader(in, encoding);
 		if (buffer) {
 			reader = new BufferedReader(reader);
 		}
@@ -546,7 +546,7 @@ public class JSONStream {
 			}
 			if (c == 0 || (l != '\\' && c == '"')) break;
 			sb.append(c);
-			l = c;
+			l = l == '\\' ? 0 : c;
 		}
 		if (eof)
 			throw new IOException("nextString: Unexpected end");
@@ -652,7 +652,7 @@ public class JSONStream {
 						return new Integer(Integer.parseInt(str.substring(2), 16));
 					}
 					// decimal
-					if (str.indexOf('.') != -1 || str.indexOf('E') != -1 || "-0".equals(str))
+					if (str.indexOf('.') != -1 || str.indexOf('E') != -1 || str.indexOf('e') != -1 || "-0".equals(str))
 						return new Double(Double.parseDouble(str));
 					if (first == '-') length--;
 					if (length > 8) // (str.length() - (str.charAt(0) == '-' ? 1 : 0)) >= 10
