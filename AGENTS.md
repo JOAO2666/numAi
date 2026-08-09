@@ -17,7 +17,7 @@ An AI client made for Android 1.0+ with support for thinking, vision and web sea
 ## API 1 / Java 1.5 constraints
 
 - No `android.app.Fragment`, `AsyncTask`, `android.content.ClipboardManager` (use `android.text.ClipboardManager`).
-- No `Calendar.getInstance().toInstant()`, `String.join()`, `Build.VERSION_CODES` constants above API 1.
+- No `Calendar.getInstance().toInstant()`, `String.join()`, `Build.VERSION_CODES`, `Build.VERSION.SDK_INT` (use `Integer.parseInt(Build.VERSION.SDK)`)
 - No `try-with-resources` (Java 7).
 - Use `new Thread(...).start()`, `runOnUiThread`, or `Handler`.
 - `SSLDisabler.disableSSLCertificateChecking()` must remain called at startup (in `MainActivity.onCreate`).

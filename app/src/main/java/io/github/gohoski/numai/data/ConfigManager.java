@@ -49,7 +49,7 @@ public class ConfigManager {
                 preferences.getInt(KEY_UPDATE_DELAY, 250),
                 preferences.getBoolean(KEY_WEB_SEARCH_ENABLED, true),
                 preferences.getString(KEY_SEARCH_ENGINE, "bing"),
-                preferences.getBoolean(KEY_WEB_FETCH_ENABLED, true));
+                preferences.getBoolean(KEY_WEB_FETCH_ENABLED, Integer.parseInt(android.os.Build.VERSION.SDK) >= 4));
     }
 
     private void saveConfig() {

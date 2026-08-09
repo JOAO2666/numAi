@@ -95,16 +95,16 @@
         android:padding="12dp"
         android:visibility="gone">
 
-        <RelativeLayout
+        <LinearLayout
             android:layout_width="fill_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
 
             <TextView
                 android:id="@+id/searchTitle"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_alignParentLeft="true"
-                android:layout_toLeftOf="@+id/searchResultsCount"
+                android:layout_weight="1"
                 android:text="@android:string/search_go"
                 android:textSize="14sp"
                 android:textStyle="bold" />
@@ -113,11 +113,10 @@
                 android:id="@+id/searchResultsCount"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_alignParentRight="true"
                 android:textColor="@android:color/darker_gray"
                 android:textSize="12sp"
                 tools:text="12 results" />
-        </RelativeLayout>
+        </LinearLayout>
 
         <TextView
             android:id="@+id/searchQueries"
