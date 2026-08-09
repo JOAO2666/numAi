@@ -114,8 +114,10 @@ public class MainActivity extends Activity {
         }
         UPDATE_DELAY_MS = config.getConfig().getUpdateDelay();
 
-        ChatManager.getInstance().loadChats(this);
-        ChatManager.getInstance().startNewChat();
+        if (savedInstanceState == null) {
+            ChatManager.getInstance().loadChats(this);
+            ChatManager.getInstance().startNewChat();
+        }
 
         apiService = new ApiService(this);
         msgList = (ListView) findViewById(R.id.messages_list);
