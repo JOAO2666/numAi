@@ -12,7 +12,6 @@ import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
 
 import cc.nnproject.json.JSON;
 import cc.nnproject.json.JSONArray;
@@ -99,8 +98,6 @@ public class MessageAdapter extends ArrayAdapter<Message> {
         List<String> images = message.getInputImages();
         holder.messageText.setText(message.getContent() + (images == null || images.isEmpty() ? "" : String.format("\n " + context.getString(R.string.img_count), String.valueOf(images.size()))));
 
-        convertView.requestLayout();
-
         return convertView;
     }
 
@@ -127,16 +124,14 @@ public class MessageAdapter extends ArrayAdapter<Message> {
             holder = (ReceivedViewHolder) convertView.getTag();
         }
 
-        String content = message.getContent();
-
-        String thinkingContent = extractThinkingContent(content);
-        String displayContent = extractContentWithoutThinking(content);
+        String thinkingRaw = message.getThinkingRaw();
+        String displayRaw = message.getDisplayRaw();
 
         // Thinking Box
-        if (thinkingContent.length() != 0) {
+        if (thinkingRaw != null && thinkingRaw.length() != 0) {
             holder.thinkingLayout.setVisibility(View.VISIBLE);
             holder.thinkingProcess.setMovementMethod(LinkMovementMethod.getInstance());
-            holder.thinkingProcess.setText(MarkdownParser.parse(context, thinkingContent, false));
+            holder.thinkingProcess.setText(message.getParsedThinkContent(context, false));
         } else {
             holder.thinkingLayout.setVisibility(View.GONE);
         }
@@ -203,55 +198,15 @@ public class MessageAdapter extends ArrayAdapter<Message> {
 
         // Response Box
         holder.llm.setText(message.getLlm());
-        if (displayContent.length() != 0) {
+        if (displayRaw != null && displayRaw.length() != 0) {
             holder.response.setVisibility(View.VISIBLE);
             holder.messageText.setMovementMethod(LinkMovementMethod.getInstance());
-            holder.messageText.setText(MarkdownParser.parse(context, displayContent, false));
+            holder.messageText.setText(message.getParsedDisplayContent(context, false));
         } else {
             holder.response.setVisibility(View.GONE);
         }
 
-        convertView.requestLayout();
-
         return convertView;
-    }
-
-    private String extractThinkingContent(String content) {
-        if (content == null) return "";
-        int thinkStart = content.indexOf("<think>");
-        if (thinkStart != -1) {
-            int thinkEnd = content.indexOf("</think>", thinkStart);
-            if (thinkEnd != -1) {
-                return content.substring(thinkStart + 7, thinkEnd).trim();
-            } else {
-                return content.substring(thinkStart + 7).trim();
-            }
-        }
-        return "";
-    }
-
-    private static final Pattern PATTERN_THOUGHT_CHANNEL_1 = Pattern.compile("(?i)^\\s*thought\\s*<\\|?channel\\|?>");
-    private static final Pattern PATTERN_THOUGHT_CHANNEL_2 = Pattern.compile("(?i)^\\s*<\\|?channel\\|?>");
-    private static final Pattern PATTERN_THOUGHT_CHANNEL_3 = Pattern.compile("(?i)^\\s*<\\|?channel>thought\\s*");
-    private static final Pattern PATTERN_THOUGHT_CHANNEL_4 = Pattern.compile("(?i)^\\s*thought\\s*\n");
-    private String extractContentWithoutThinking(String content) {
-        if (content == null) return "";
-        String text = content;
-        int thinkStart = text.indexOf("<think>");
-        if (thinkStart != -1) {
-            int thinkEnd = text.indexOf("</think>", thinkStart);
-            if (thinkEnd != -1) {
-                text = text.substring(0, thinkStart) + text.substring(thinkEnd + 8);
-            } else {
-                text = text.substring(0, thinkStart);
-            }
-        }
-
-        text = PATTERN_THOUGHT_CHANNEL_1.matcher(text).replaceAll("");
-        text = PATTERN_THOUGHT_CHANNEL_2.matcher(text).replaceAll("");
-        text = PATTERN_THOUGHT_CHANNEL_3.matcher(text).replaceAll("");
-        text = PATTERN_THOUGHT_CHANNEL_4.matcher(text).replaceAll("");
-        return text.trim();
     }
 
     private static class SentViewHolder {

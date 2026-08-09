@@ -47,13 +47,24 @@ public class MarkdownParser {
         }
 
         SpannableStringBuilder sb = new SpannableStringBuilder();
-        String[] lines = text.split("\r?\n", -1);
-
+        int len = text.length();
+        int lineStart = 0;
         boolean inCodeBlock = false;
         int codeBlockStart = -1;
 
-        for (int i = 0; i < lines.length; i++) {
-            String line = lines[i];
+        while (lineStart < len) {
+            int lineEnd = text.indexOf('\n', lineStart);
+            if (lineEnd == -1) {
+                lineEnd = len;
+            }
+
+            int curEnd = lineEnd;
+            if (curEnd > lineStart && text.charAt(curEnd - 1) == '\r') {
+                curEnd--;
+            }
+
+            String line = text.substring(lineStart, curEnd);
+            boolean isLastLine = (lineEnd == len);
 
             if (line.trim().startsWith("```")) {
                 if (!inCodeBlock) {
@@ -65,38 +76,61 @@ public class MarkdownParser {
                         applyCodeBlockStyle(sb, codeBlockStart, sb.length());
                     }
                 }
-                if (i < lines.length - 1 && !inCodeBlock) {
+                if (!isLastLine && !inCodeBlock) {
                     sb.append("\n");
                 }
+                lineStart = lineEnd + 1;
                 continue;
             }
 
             if (inCodeBlock) {
                 sb.append(line);
-                if (i < lines.length - 1) {
+                if (!isLastLine) {
                     sb.append("\n");
                 }
+                lineStart = lineEnd + 1;
                 continue;
             }
 
-            if (i + 1 < lines.length && isTableLine(line) && isTableDelimiterLine(lines[i + 1])) {
-                List<String> tableLines = new ArrayList<String>();
-                tableLines.add(line);
-                tableLines.add(lines[i + 1]);
-                int j = i + 2;
-                while (j < lines.length && isTableLine(lines[j]) && !lines[j].trim().startsWith("```")) {
-                    tableLines.add(lines[j]);
-                    j++;
+            if (!isLastLine && isTableLine(line)) {
+                int nextLineStart = lineEnd + 1;
+                int nextLineEnd = text.indexOf('\n', nextLineStart);
+                if (nextLineEnd == -1) nextLineEnd = len;
+                int nextCurEnd = nextLineEnd;
+                if (nextCurEnd > nextLineStart && text.charAt(nextCurEnd - 1) == '\r') nextCurEnd--;
+                String nextLine = text.substring(nextLineStart, nextCurEnd);
+
+                if (isTableDelimiterLine(nextLine)) {
+                    List<String> tableLines = new ArrayList<String>();
+                    tableLines.add(line);
+                    tableLines.add(nextLine);
+
+                    int scanPos = nextLineEnd + 1;
+                    while (scanPos < len) {
+                        int scanEnd = text.indexOf('\n', scanPos);
+                        if (scanEnd == -1) scanEnd = len;
+                        int scanCurEnd = scanEnd;
+                        if (scanCurEnd > scanPos && text.charAt(scanCurEnd - 1) == '\r') scanCurEnd--;
+                        String scanLine = text.substring(scanPos, scanCurEnd);
+
+                        if (isTableLine(scanLine) && !scanLine.trim().startsWith("```")) {
+                            tableLines.add(scanLine);
+                            scanPos = scanEnd + 1;
+                        } else {
+                            break;
+                        }
+                    }
+                    boolean tableIsGenerating = isGenerating && (scanPos >= len);
+                    renderTable(context, sb, tableLines, tableIsGenerating);
+                    lineStart = scanPos;
+                    if (lineStart < len) {
+                        sb.append("\n");
+                    }
+                    continue;
                 }
-                boolean tableIsGenerating = isGenerating && (j >= lines.length);
-                renderTable(context, sb, tableLines, tableIsGenerating);
-                i = j - 1;
-                if (i < lines.length - 1) {
-                    sb.append("\n");
-                }
-                continue;
-            } else if (isGenerating && i == lines.length - 1 && isTableLine(line)) {
+            } else if (isGenerating && isLastLine && isTableLine(line)) {
                 renderLoadingTable(context, sb);
+                lineStart = lineEnd + 1;
                 continue;
             }
 
@@ -106,28 +140,30 @@ public class MarkdownParser {
             else if (line.startsWith("### ")) headerLevel = 3;
             else if (line.startsWith("#### ")) headerLevel = 4;
 
-            int lineStart = sb.length();
+            int sbLineStart = sb.length();
 
             if (headerLevel > 0) {
                 String headerText = line.substring(headerLevel + 1);
                 parseInlineFormatting(sb, headerText);
-                int lineEnd = sb.length();
+                int sbLineEnd = sb.length();
 
                 float scale = 1.4f - (headerLevel * 0.08f);
-                sb.setSpan(new RelativeSizeSpan(scale), lineStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                sb.setSpan(new StyleSpan(Typeface.BOLD), lineStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                sb.setSpan(new RelativeSizeSpan(scale), sbLineStart, sbLineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                sb.setSpan(new StyleSpan(Typeface.BOLD), sbLineStart, sbLineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             } else if (line.startsWith("- ") || line.startsWith("* ")) {
                 String bulletText = line.substring(2);
                 parseInlineFormatting(sb, bulletText);
-                int lineEnd = sb.length();
-                sb.setSpan(new BulletSpan(10), lineStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                int sbLineEnd = sb.length();
+                sb.setSpan(new BulletSpan(10), sbLineStart, sbLineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             } else {
                 parseInlineFormatting(sb, line);
             }
 
-            if (i < lines.length - 1) {
+            if (!isLastLine) {
                 sb.append("\n");
             }
+
+            lineStart = lineEnd + 1;
         }
 
         if (inCodeBlock && codeBlockStart >= 0 && sb.length() > codeBlockStart) {
@@ -176,7 +212,7 @@ public class MarkdownParser {
     private static void renderLoadingTable(Context context, SpannableStringBuilder sb) {
         sb.append("\n");
         int btnStart = sb.length();
-        String loadingText = context.getString(R.string.generating_table);
+        String loadingText = context != null ? context.getString(R.string.generating_table) : "Generating table...";
         sb.append(" ").append(loadingText).append(" ");
         int btnEnd = sb.length();
         sb.setSpan(new BackgroundColorSpan(COLOR_CODE_BG), btnStart, btnEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
@@ -193,27 +229,20 @@ public class MarkdownParser {
             return;
         }
 
-        List<String> headers = parseTableCells(tableLines.get(0));
-        List<List<String>> rows = new ArrayList<List<String>>();
-        for (int i = 2; i < tableLines.size(); i++) {
-            rows.add(parseTableCells(tableLines.get(i)));
-        }
-        if (headers.isEmpty()) return;
-
-        String htmlTable = buildHtmlTable(headers, rows);
         sb.append("\n");
 
         int btnStart = sb.length();
-        sb.append(context.getString(R.string.view_table));
+        String btnText = context != null ? context.getString(R.string.view_table) : "View table";
+        sb.append(btnText);
         int btnEnd = sb.length();
 
-        float density = context.getResources().getDisplayMetrics().density;
+        float density = context != null ? context.getResources().getDisplayMetrics().density : 1.0f;
         int padH = (int) (20 * density);
         int padV = (int) (6 * density);
         float radius = 6 * density;
 
         sb.setSpan(new TableButtonSpan(padH, padV, COLOR_BUTTON_BG, COLOR_BUTTON_TEXT, radius), btnStart, btnEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        sb.setSpan(new TableClickableSpan(htmlTable), btnStart, btnEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        sb.setSpan(new TableClickableSpan(tableLines), btnStart, btnEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         sb.append("\n");
     }
 
@@ -252,7 +281,6 @@ public class MarkdownParser {
             float textWidth = paint.measureText(text, start, end);
             Paint.FontMetricsInt fm = paint.getFontMetricsInt();
 
-//            float rectLeft = x;
             float rectTop = y + fm.ascent - padVertical;
             float rectRight = x + textWidth + padHorizontal * 2;
             float rectBottom = y + fm.descent + padVertical;
@@ -288,6 +316,7 @@ public class MarkdownParser {
 
     private static String formatCellMarkdown(String text) {
         if (text == null || text.length() == 0) return "";
+        if (!hasMarkdownSymbols(text)) return escapeHtml(text);
         String s = escapeHtml(text);
         s = s.replaceAll("\\*\\*(.*?)\\*\\*", "<b>$1</b>");
         s = s.replaceAll("\\*(.*?)\\*", "<i>$1</i>");
@@ -332,10 +361,10 @@ public class MarkdownParser {
     }
 
     private static class TableClickableSpan extends ClickableSpan {
-        private final String htmlTable;
+        private final List<String> tableLines;
 
-        TableClickableSpan(String htmlTable) {
-            this.htmlTable = htmlTable;
+        TableClickableSpan(List<String> tableLines) {
+            this.tableLines = tableLines;
         }
 
         @Override
@@ -347,6 +376,14 @@ public class MarkdownParser {
         @Override
         public void onClick(View widget) {
             try {
+                if (tableLines == null || tableLines.size() < 2) return;
+                List<String> headers = parseTableCells(tableLines.get(0));
+                List<List<String>> rows = new ArrayList<List<String>>();
+                for (int i = 2; i < tableLines.size(); i++) {
+                    rows.add(parseTableCells(tableLines.get(i)));
+                }
+                String htmlTable = buildHtmlTable(headers, rows);
+
                 Context context = widget.getContext();
                 AlertDialog.Builder builder = new AlertDialog.Builder(context);
                 builder.setTitle(R.string.view_table);
@@ -374,7 +411,24 @@ public class MarkdownParser {
         sb.setSpan(new BackgroundColorSpan(COLOR_CODE_BG), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
     }
 
+    private static boolean hasMarkdownSymbols(String text) {
+        if (text == null) return false;
+        int len = text.length();
+        for (int i = 0; i < len; i++) {
+            char c = text.charAt(i);
+            if (c == '`' || c == '[' || c == '*' || c == '_' || c == '~') {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static void parseInlineFormatting(SpannableStringBuilder sb, String text) {
+        if (!hasMarkdownSymbols(text)) {
+            sb.append(text);
+            return;
+        }
+
         int len = text.length();
         int i = 0;
 

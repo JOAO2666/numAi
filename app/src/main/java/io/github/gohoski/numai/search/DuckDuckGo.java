@@ -14,7 +14,7 @@ import io.github.gohoski.numai.api.ApiRequest;
 import io.github.gohoski.numai.api.ApiResponse;
 
 /**
- * Created by Glev on 07.08.2026.
+ * Created by Gleb on 07.08.2026.
  */
 class DuckDuckGo implements SearchEngine {
     private final ApiClient api;
@@ -31,19 +31,18 @@ class DuckDuckGo implements SearchEngine {
 
         String postBody = "q=" + URLEncoder.encode(query, "UTF-8") + "&b=";
 
-        ApiRequest request = new ApiRequest("https://html.duckduckgo.com", "/html/", "POST");
-        request.addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0");
-        request.addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-        request.addHeader("Accept-Language", "ru-RU,ru;q=0.9,en-GB;q=0.8,en;q=0.7");
-        request.addHeader("Content-Type", "application/x-www-form-urlencoded");
-        request.addHeader("Referer", "https://html.duckduckgo.com/");
-        request.addHeader("Origin", "https://html.duckduckgo.com");
-        request.addHeader("Upgrade-Insecure-Requests", "1");
-        request.addHeader("Sec-Fetch-Dest", "document");
-        request.addHeader("Sec-Fetch-Mode", "navigate");
-        request.addHeader("Sec-Fetch-Site", "same-origin");
-        request.addHeader("Sec-Fetch-User", "?1");
-        request.addHeader("Priority", "u=0, i");
+        ApiRequest request = new ApiRequest("https://html.duckduckgo.com", "/html/", "POST")
+                .addHeader("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7_8 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1")
+                .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                .addHeader("Accept-Language", "ru-RU,ru;q=0.9,en-US;q=0.8")
+                .addHeader("Upgrade-Insecure-Requests", "1")
+                .addHeader("Sec-Fetch-Site", "none")
+                .addHeader("Sec-Fetch-Mode", "navigate")
+                .addHeader("Sec-Fetch-User", "?1")
+                .addHeader("Sec-Fetch-Dest", "document")
+                .addHeader("Content-Type", "application/x-www-form-urlencoded")
+                .addHeader("Referer", "https://html.duckduckgo.com/")
+                .addHeader("Origin", "https://html.duckduckgo.com");
         request.setBody(postBody);
 
         ApiResponse response = api.execute(request);

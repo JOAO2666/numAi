@@ -1,10 +1,12 @@
 package io.github.gohoski.numai.model;
 
+import android.content.Context;
 import java.util.ArrayList;
 import java.util.List;
 
 import cc.nnproject.json.JSONArray;
 import cc.nnproject.json.JSONObject;
+import io.github.gohoski.numai.ui.MarkdownParser;
 
 public class Message {
     private Role role = Role.USER;
@@ -16,18 +18,25 @@ public class Message {
     private String toolCallId;
     private int searchResultCount = -1;
 
+    // Unified cache fields
+    private transient String cachedRawContent = null;
+    private transient CharSequence cachedParsedDisplayContent = null;
+    private transient CharSequence cachedParsedThinkContent = null;
+    private transient String cachedThinkingRaw = null;
+    private transient String cachedDisplayRaw = null;
+
     public Message(Role role, String content) {
         this.role = role;
-        this.content = content;
+        this.content = content != null ? content : "";
     }
     public Message(Role role, String content, String llm) {
         this.role = role;
-        this.content = content;
+        this.content = content != null ? content : "";
         this.llm = llm;
     }
     public Message(Role role, String content, List<String> inputImages, String llm) {
         this.role = role;
-        this.content = content;
+        this.content = content != null ? content : "";
         this.llm = llm;
         this.inputImages = inputImages;
     }
@@ -77,11 +86,107 @@ public class Message {
     }
 
     public void updateContent(String additionalContent) {
-        this.content += additionalContent;
+        if (additionalContent != null && additionalContent.length() > 0) {
+            this.content += additionalContent;
+            invalidateCache();
+        }
     }
 
     public void setContent(String newContent) {
-        this.content = newContent;
+        String safeContent = newContent != null ? newContent : "";
+        if (!safeContent.equals(this.content)) {
+            this.content = safeContent;
+            invalidateCache();
+        }
+    }
+
+    public void invalidateCache() {
+        cachedRawContent = null;
+        cachedParsedDisplayContent = null;
+        cachedParsedThinkContent = null;
+        cachedThinkingRaw = null;
+        cachedDisplayRaw = null;
+    }
+
+    public String getThinkingRaw() {
+        ensureParsedStructure();
+        return cachedThinkingRaw;
+    }
+
+    public String getDisplayRaw() {
+        ensureParsedStructure();
+        return cachedDisplayRaw;
+    }
+
+    public CharSequence getParsedDisplayContent(Context context, boolean isGenerating) {
+        ensureParsedStructure();
+        if (cachedParsedDisplayContent == null) {
+            cachedParsedDisplayContent = MarkdownParser.parse(context, cachedDisplayRaw, isGenerating);
+        }
+        return cachedParsedDisplayContent;
+    }
+
+    public CharSequence getParsedThinkContent(Context context, boolean isGenerating) {
+        ensureParsedStructure();
+        if (cachedParsedThinkContent == null) {
+            cachedParsedThinkContent = MarkdownParser.parse(context, cachedThinkingRaw, isGenerating);
+        }
+        return cachedParsedThinkContent;
+    }
+
+    private void ensureParsedStructure() {
+        if (cachedRawContent != null && cachedRawContent.equals(content)) {
+            return;
+        }
+
+        cachedRawContent = content;
+        cachedThinkingRaw = "";
+        cachedDisplayRaw = "";
+
+        if (content == null || content.length() == 0) {
+            return;
+        }
+
+        String text = content;
+        int thinkStart = text.indexOf("<think>");
+        if (thinkStart != -1) {
+            int thinkEnd = text.indexOf("</think>", thinkStart);
+            if (thinkEnd != -1) {
+                cachedThinkingRaw = text.substring(thinkStart + 7, thinkEnd).trim();
+                text = text.substring(0, thinkStart) + text.substring(thinkEnd + 8);
+            } else {
+                cachedThinkingRaw = text.substring(thinkStart + 7).trim();
+                text = text.substring(0, thinkStart);
+            }
+        }
+
+        cachedDisplayRaw = stripThoughtChannelPrefix(text);
+    }
+
+    private static String stripThoughtChannelPrefix(String text) {
+        if (text == null || text.length() == 0) return "";
+        String trimmed = text.trim();
+        String lower = trimmed.toLowerCase();
+
+        if (lower.startsWith("thought") && lower.contains("channel")) {
+            int idx = trimmed.indexOf('>');
+            if (idx != -1 && idx < 30) {
+                return trimmed.substring(idx + 1).trim();
+            }
+        }
+        if (lower.startsWith("<|channel|>")) {
+            return trimmed.substring(11).trim();
+        }
+        if (lower.startsWith("<channel>")) {
+            return trimmed.substring(9).trim();
+        }
+        if (lower.startsWith("thought\n")) {
+            return trimmed.substring(8).trim();
+        }
+        if (lower.startsWith("thought\r\n")) {
+            return trimmed.substring(9).trim();
+        }
+        return trimmed;
     }
 
     public boolean isSent() {

@@ -7,7 +7,6 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Color;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
@@ -38,7 +37,6 @@ import android.widget.Toast;
 import android.widget.ToggleButton;
 
 import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -64,9 +62,7 @@ import io.github.gohoski.numai.search.SearchEngine;
 import io.github.gohoski.numai.search.SearchManager;
 import io.github.gohoski.numai.search.SearchResult;
 import io.github.gohoski.numai.search.WebFetcher;
-import io.github.gohoski.numai.ui.MarkdownParser;
 import io.github.gohoski.numai.ui.MessageAdapter;
-import io.github.gohoski.numai.util.Base64;
 import io.github.gohoski.numai.util.SSLDisabler;
 
 public class MainActivity extends Activity {
@@ -91,6 +87,7 @@ public class MainActivity extends Activity {
     private volatile boolean isCancelled = false;
     int UPDATE_DELAY_MS = 250;
 
+    private final Object bufferLock = new Object();
     private final StringBuilder thinkBuffer = new StringBuilder();
     private final StringBuilder contentBuffer = new StringBuilder();
     private final List<String> inputImages = new ArrayList<String>();
@@ -281,26 +278,26 @@ public class MainActivity extends Activity {
                 String ccLicense = getString(R.string.about_cc);
                 SpannableStringBuilder sb = new SpannableStringBuilder(
                         getString(R.string.about_, ccLicense) + "\n\nMIT License\n" +
-                        "\n" +
-                        "Copyright (c) 2021-2026 Arman Jussupgaliyev\n" +
-                        "\n" +
-                        "Permission is hereby granted, free of charge, to any person obtaining a copy\n" +
-                        "of this software and associated documentation files (the \"Software\"), to deal\n" +
-                        "in the Software without restriction, including without limitation the rights\n" +
-                        "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n" +
-                        "copies of the Software, and to permit persons to whom the Software is\n" +
-                        "furnished to do so, subject to the following conditions:\n" +
-                        "\n" +
-                        "The above copyright notice and this permission notice shall be included in all\n" +
-                        "copies or substantial portions of the Software.\n" +
-                        "\n" +
-                        "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n" +
-                        "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n" +
-                        "FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n" +
-                        "AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n" +
-                        "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n" +
-                        "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n" +
-                        "SOFTWARE.");
+                                "\n" +
+                                "Copyright (c) 2021-2026 Arman Jussupgaliyev\n" +
+                                "\n" +
+                                "Permission is hereby granted, free of charge, to any person obtaining a copy\n" +
+                                "of this software and associated documentation files (the \"Software\"), to deal\n" +
+                                "in the Software without restriction, including without limitation the rights\n" +
+                                "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n" +
+                                "copies of the Software, and to permit persons to whom the Software is\n" +
+                                "furnished to do so, subject to the following conditions:\n" +
+                                "\n" +
+                                "The above copyright notice and this permission notice shall be included in all\n" +
+                                "copies or substantial portions of the Software.\n" +
+                                "\n" +
+                                "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n" +
+                                "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n" +
+                                "FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n" +
+                                "AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n" +
+                                "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n" +
+                                "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n" +
+                                "SOFTWARE.");
                 int linkStart = sb.toString().indexOf(ccLicense);
                 if (linkStart >= 0)
                     sb.setSpan(new URLSpan("https://creativecommons.org/licenses/by/3.0/"),
@@ -495,8 +492,10 @@ public class MainActivity extends Activity {
     }
 
     private void requestAICompletion() {
-        thinkBuffer.setLength(0);
-        contentBuffer.setLength(0);
+        synchronized (bufferLock) {
+            thinkBuffer.setLength(0);
+            contentBuffer.setLength(0);
+        }
         isThinkingState = false;
         isGenerating = true;
         final boolean thinkingEnabled = thinkingToggle.isChecked();
@@ -629,24 +628,37 @@ public class MainActivity extends Activity {
                 String reasoningStr = extractJSONReasoning(delta);
                 boolean hasUpdates = false;
 
-                if (thinkingEnabled) {
-                    if (reasoningStr != null && reasoningStr.length() > 0) {
-                        thinkBuffer.append(reasoningStr);
-                        hasUpdates = true;
-                    }
-                    if (contentStr != null && contentStr.length() > 0) {
-                        processContentWithTags(contentStr);
-                        hasUpdates = true;
-                    }
-                } else {
-                    if (contentStr != null && contentStr.length() > 0) {
-                        processContentWithTags(contentStr);
-                        hasUpdates = true;
+                synchronized (bufferLock) {
+                    if (thinkingEnabled) {
+                        if (reasoningStr != null && reasoningStr.length() > 0) {
+                            thinkBuffer.append(reasoningStr);
+                            hasUpdates = true;
+                        }
+                        if (contentStr != null && contentStr.length() > 0) {
+                            processContentWithTags(contentStr);
+                            hasUpdates = true;
+                        }
+                    } else {
+                        if (contentStr != null && contentStr.length() > 0) {
+                            processContentWithTags(contentStr);
+                            hasUpdates = true;
+                        }
                     }
                 }
 
                 long currentTime = System.currentTimeMillis();
-                if (hasUpdates && (currentTime - lastUpdateTime >= UPDATE_DELAY_MS)) {
+                long targetDelay = UPDATE_DELAY_MS;
+                int contentLength;
+                synchronized (bufferLock) {
+                    contentLength = contentBuffer.length() + thinkBuffer.length();
+                }
+                if (contentLength > 3500) {
+                    targetDelay = Math.max(UPDATE_DELAY_MS, 600);
+                } else if (contentLength > 1500) {
+                    targetDelay = Math.max(UPDATE_DELAY_MS, 400);
+                }
+
+                if (hasUpdates && (currentTime - lastUpdateTime >= targetDelay)) {
                     lastUpdateTime = currentTime;
                     updateStreamUI(msg, thinkingEnabled, false);
                 }
@@ -762,8 +774,7 @@ public class MainActivity extends Activity {
                     } else {
                         resultText = "{\"status\": \"error\", \"message\": \"Unsupported tool call\"}";
                     }
-
-                    System.out.println(resultText);
+                    Log.i("Tool", resultText);
                     Message toolMessage = new Message(Role.TOOL, resultText);
                     toolMessage.setToolCallId(callId);
                     MessageManager.getInstance().addMessage(toolMessage);
@@ -822,8 +833,13 @@ public class MainActivity extends Activity {
             });
             return;
         }
-        String displayContent = cleanChannelTokens(contentBuffer.toString());
-        String displayThink = thinkBuffer.toString();
+
+        String displayContent;
+        String displayThink;
+        synchronized (bufferLock) {
+            displayContent = cleanChannelTokens(contentBuffer.toString());
+            displayThink = thinkBuffer.toString();
+        }
 
         if (thinkingEnabled && displayThink.length() > 0) {
             msg.setContent("<think>" + displayThink + "</think>" + displayContent);
@@ -845,7 +861,7 @@ public class MainActivity extends Activity {
 
                 if (tvText != null) {
                     tvText.setMovementMethod(LinkMovementMethod.getInstance());
-                    tvText.setText(MarkdownParser.parse(MainActivity.this, displayContent, !isFinal));
+                    tvText.setText(msg.getParsedDisplayContent(MainActivity.this, !isFinal));
                 }
 
                 if (thinkingEnabled) {
@@ -856,7 +872,7 @@ public class MainActivity extends Activity {
                         if (noThink != null) noThink.setVisibility(View.GONE);
                         if (tvThink != null) {
                             tvThink.setMovementMethod(LinkMovementMethod.getInstance());
-                            tvThink.setText(MarkdownParser.parse(MainActivity.this, displayThink, !isFinal));
+                            tvThink.setText(msg.getParsedThinkContent(MainActivity.this, !isFinal));
                         }
                     } else {
                         thinkLayout.setVisibility(View.VISIBLE);
