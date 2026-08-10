@@ -99,7 +99,7 @@ public class ApiService {
 
                             JSONObject function = new JSONObject();
                             function.put("name", "web_search");
-                            function.put("description", "Mandatory tool to fetch real-time facts, tech tutorials, and software compatibility info. Must be executed prior to answering any factual or technical user query.");
+                            function.put("description", "Mandatory tool to fetch real-time facts, tech tutorials, and software compatibility info. Must be executed prior to answering any factual or technical user query!");
 
                             JSONObject parameters = new JSONObject();
                             parameters.put("type", "object");

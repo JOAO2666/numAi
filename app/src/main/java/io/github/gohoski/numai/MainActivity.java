@@ -172,7 +172,7 @@ public class MainActivity extends Activity {
                 final Message selectedMsg = adapter.getItem(position);
                 if (selectedMsg == null) return true;
 
-                String[] options = new String[]{getString(android.R.string.copy), getString(R.string.chats) != null ? "Regenerate" : "Regenerate"};
+                String[] options = new String[]{getString(android.R.string.copy), getString(R.string.regenerate)};
                 new AlertDialog.Builder(MainActivity.this)
                         .setItems(options, new DialogInterface.OnClickListener() {
                             @Override

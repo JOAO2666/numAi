@@ -4,4 +4,6 @@
         <item>Bing</item>
         <item>DuckDuckGo</item>
     </string-array>
+    <string name="app_name" translatable="false">numAi</string>
+    <string name="about_cc" translatable="false">Creative Commons 3.0 Attribution License</string>
 </resources>

@@ -1,5 +1,4 @@
 <resources>
-    <string name="app_name">numAi</string>
     <string name="ask_anything">Ask anything</string>
     <string name="thinking">Thinking</string>
     <string name="api_key">API key</string>
@@ -59,10 +58,10 @@
     <string name="guide_ollama_cloud">This API supports Android 1.0+ out of the box, but provides few free models.\n\n1. On a modern browser, go to <b>ollama.com</b> and create an account.\n2. After logging in, go to <b>Settings &gt; Keys</b>.\n3. Click <b>Add API Key</b>, then <b>Generate API Key</b>.\n4. Copy the key that appears and transfer it to your device using one of these methods:</string>
     <string name="guide_opencode_zen">Android 1.6+. For Android &lt;4.4, <b>Wolfius</b> is required: github.com/gohoski/Wolfius\n\n1. On a modern browser, go to <b>opencode.ai/auth</b> and create an account.\n2. After logging in, navigate to the <b>API Keys</b> section in your dashboard.\n3. Click <b>Create API Key</b> and enter any key name.\n4. Copy the key that appears and transfer it to your device using one of these methods:</string>
     <string name="copy_key">\n<b>Method 1: File transfer</b>\n• Create a text file with only the API key and save it.\n• Transfer the file to your phone via USB, Bluetooth or similar.\n• You will be able to import the key from the file on the next screen.\n\n<b>Method 2: adb</b>\n• On the <b>next screen</b>, press on the text input box, and paste the key using this command:\n<b>adb shell input text \"API KEY\"</b></string>
-    <string name="about_">An AI app for Android 1.0+ with support for deep thinking, image vision, and web search. ChatGPT, DeepSeek, Gemini and more for legacy Android.\n▶ github.com/gohoski/numAi\n▶ t.me/AppDataApps\n\nLicensed under the WTFPL. See www.wtfpl.net for more details.\nThe Android robot is reproduced or modified from work created and shared by Google and used according to terms described in the %1$s Attribution License.\nThe NNJSON library used in this project is licensed under the MIT License provided below.</string>
-    <string name="about_cc">Creative Commons 3.0</string>
+    <string name="about_">An AI app for Android 1.0+ with support for deep thinking, image vision, and web search. ChatGPT, DeepSeek, Gemini and more for legacy Android.\n▶ github.com/gohoski/numAi\n▶ t.me/AppDataApps\n\nLicensed under the WTFPL. See www.wtfpl.net for more details.\nThe Android robot is reproduced or modified from work created and shared by Google and used according to terms described in the %1$s.\nThe NNJSON library used in this project is licensed under the MIT License provided below.</string>
     <string name="space_fail">There may be not enough storage space left. Please try deleting old chats and try again.</string>
     <string name="exit">Exit</string>
     <string name="search_engine">Search engine</string>
-    <string name="search_engine_">Bing is supported on Android 1.0+. DuckDuckGo requires Wolfius for Android &lt;4.4 and can give more results, but may get limited.</string>
+    <string name="search_engine_">Bing is supported on Android 1.0+. DuckDuckGo requires Wolfius for Android &lt;4.4 and can give more results, but may get blocked, so it is recommended to use Bing.</string>
+    <string name="regenerate">Regenerate</string>
 </resources>
