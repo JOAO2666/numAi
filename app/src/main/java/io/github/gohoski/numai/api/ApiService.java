@@ -178,7 +178,9 @@ public class ApiService {
                         String errorBody = "no body";
                         try {
                             errorBody = apiClient.readInputStreamToString(response.getBody());
-                        } catch (Exception ignored) {}
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
                         deliverError(callback, new ApiError(ctx.getString(hasImg ? R.string.fail_send_vision : R.string.fail_send, response.getStatusCode() + " " + errorBody)));
                     }
                 } catch (ApiError e) {
