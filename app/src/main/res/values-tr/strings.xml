@@ -28,6 +28,8 @@
     <string name="change_system">Sistem istemini değiştir</string>
     <string name="other">Diğer…</string>
     <string name="base_url">API temel URL\'nizi girin</string>
+    <string name="custom_model">Model adını girin</string>
+    <string name="bad_model">Geçersiz model adı!</string>
     <string name="welcome">numAi\'ye hoş geldiniz!</string>
     <string name="text_copied">Metin panoya kopyalandı</string>
     <string name="bad_url">Geçersiz URL!</string>

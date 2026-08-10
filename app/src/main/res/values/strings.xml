@@ -27,6 +27,8 @@
     <string name="change_system">Change system prompt</string>
     <string name="other">Other…</string>
     <string name="base_url">Enter your API base URL</string>
+    <string name="custom_model">Enter model name</string>
+    <string name="bad_model">Incorrect model name!</string>
     <string name="welcome">Welcome to numAi!</string>
     <string name="text_copied">Text copied to clipboard</string>
     <string name="bad_url">Incorrect URL!</string>

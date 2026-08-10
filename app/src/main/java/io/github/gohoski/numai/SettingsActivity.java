@@ -9,6 +9,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.MotionEvent;
 import android.view.View;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -38,6 +39,7 @@ public class SettingsActivity extends Activity {
     EditText keyText;
     boolean fetched = false;
     ArrayList<String> fetchedModels = null;
+    String lastChatModel, lastThinkModel;
     CheckBox shrinkThink, webSearch, webFetch;
     String systemPrompt;
     EditText updateDelay;
@@ -75,22 +77,12 @@ public class SettingsActivity extends Activity {
         keyText.setText(conf.getApiKey());
 
         chatSpinner = (Spinner) findViewById(R.id.chat_spinner);
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(
-                this,
-                android.R.layout.simple_spinner_item,
-                new String[]{conf.getChatModel()}
-        );
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        chatSpinner.setAdapter(adapter);
+        lastChatModel = conf.getChatModel();
+        setupModelSpinner(chatSpinner, lastChatModel);
 
         thinkSpinner = (Spinner) findViewById(R.id.think_spinner);
-        adapter = new ArrayAdapter<String>(
-                this,
-                android.R.layout.simple_spinner_item,
-                new String[]{conf.getThinkingModel()}
-        );
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        thinkSpinner.setAdapter(adapter);
+        lastThinkModel = conf.getThinkingModel();
+        setupModelSpinner(thinkSpinner, lastThinkModel);
 
         chatSpinner.setOnTouchListener(new View.OnTouchListener() {
             public boolean onTouch(View v, MotionEvent event) {
@@ -157,10 +149,12 @@ public class SettingsActivity extends Activity {
             if (fetched && savedInstanceState.containsKey("fetched_models")) {
                 fetchedModels = savedInstanceState.getStringArrayList("fetched_models");
                 if (fetchedModels != null) {
+                    ArrayList<String> options = new ArrayList<String>(fetchedModels);
+                    options.add(getString(R.string.other));
                     ArrayAdapter<String> fetchedAdapter = new ArrayAdapter<String>(
                             context,
                             android.R.layout.simple_spinner_item,
-                            fetchedModels
+                            options
                     );
                     fetchedAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
                     chatSpinner.setAdapter(fetchedAdapter);
@@ -323,6 +317,101 @@ public class SettingsActivity extends Activity {
         }
     }
 
+    private void setupModelSpinner(final Spinner spinner, final String initialModel) {
+        final ArrayList<String> options = new ArrayList<String>();
+        options.add(initialModel);
+        options.add(getString(R.string.other));
+        final ArrayAdapter<String> adapter = new ArrayAdapter<String>(
+                context,
+                android.R.layout.simple_spinner_item,
+                options
+        );
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+        spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                String selected = adapterView.getItemAtPosition(i).toString();
+                if (selected.equals(getString(R.string.other))) {
+                    if (spinner == chatSpinner) {
+                        showModelDialog(spinner, lastChatModel);
+                    } else {
+                        showModelDialog(spinner, lastThinkModel);
+                    }
+                } else if (spinner == chatSpinner) {
+                    lastChatModel = selected;
+                } else {
+                    lastThinkModel = selected;
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+            }
+        });
+    }
+
+    private void showModelDialog(final Spinner spinner, final String previousModel) {
+        final boolean[] accepted = {false};
+        final EditText edittext = new EditText(context);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.FILL_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        params.setMargins(20, 10, 20, 10);
+        edittext.setLayoutParams(params);
+        edittext.setSingleLine();
+        edittext.setTextSize(14);
+        edittext.setPadding(10, 10, 10, 10);
+        AlertDialog dialog = new AlertDialog.Builder(context)
+                .setTitle(R.string.other)
+                .setMessage(R.string.custom_model)
+                .setView(edittext)
+                .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+                        String model = edittext.getText().toString().trim();
+                        if (model.length() == 0 || model.equals(getString(R.string.other))) {
+                            Toast.makeText(context, R.string.bad_model, Toast.LENGTH_SHORT).show();
+                            restoreModelSelection(spinner, previousModel);
+                            return;
+                        }
+                        accepted[0] = true;
+                        ArrayAdapter adapter = (ArrayAdapter) spinner.getAdapter();
+                        if (indexOfItem(adapter, model) < 0) {
+                            adapter.add(model);
+                        }
+                        spinner.setSelection(indexOfItem(adapter, model));
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .create();
+        dialog.setOnDismissListener(new DialogInterface.OnDismissListener() {
+            @Override
+            public void onDismiss(DialogInterface dialogInterface) {
+                if (!accepted[0]) {
+                    restoreModelSelection(spinner, previousModel);
+                }
+            }
+        });
+        dialog.show();
+    }
+
+    private void restoreModelSelection(Spinner spinner, String model) {
+        ArrayAdapter adapter = (ArrayAdapter) spinner.getAdapter();
+        int index = indexOfItem(adapter, model);
+        spinner.setSelection(index >= 0 ? index : 0);
+    }
+
+    private int indexOfItem(ArrayAdapter adapter, String item) {
+        for (int i = 0; i < adapter.getCount(); i++) {
+            if (adapter.getItem(i).toString().equals(item)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     private void loadModels(final Spinner spinner) {
         if (fetched) {
             spinner.performClick();
@@ -333,17 +422,34 @@ public class SettingsActivity extends Activity {
             @Override
             public void onSuccess(ArrayList<String> result) {
                 fetchedModels = result;
+                ArrayList<String> options = new ArrayList<String>(result);
+                String other = getString(R.string.other);
+                String chatSel = chatSpinner.getSelectedItem() == null ? null : chatSpinner.getSelectedItem().toString();
+                if (chatSel != null && !chatSel.equals(other) && !options.contains(chatSel)) {
+                    options.add(chatSel);
+                }
+                String thinkSel = thinkSpinner.getSelectedItem() == null ? null : thinkSpinner.getSelectedItem().toString();
+                if (thinkSel != null && !thinkSel.equals(other) && !options.contains(thinkSel)) {
+                    options.add(thinkSel);
+                }
+                options.add(other);
                 ArrayAdapter<String> adapter = new ArrayAdapter<String>(
                         context,
                         android.R.layout.simple_spinner_item,
-                        result
+                        options
                 );
                 adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
                 chatSpinner.setAdapter(adapter);
                 thinkSpinner.setAdapter(adapter);
                 Config conf = config.getConfig();
-                chatSpinner.setSelection(result.indexOf(conf.getChatModel()));
-                thinkSpinner.setSelection(result.indexOf(conf.getThinkingModel()));
+                int chatPos = options.indexOf(conf.getChatModel());
+                if (chatPos >= 0) {
+                    chatSpinner.setSelection(chatPos);
+                }
+                int thinkPos = options.indexOf(conf.getThinkingModel());
+                if (thinkPos >= 0) {
+                    thinkSpinner.setSelection(thinkPos);
+                }
                 loading.dismiss();
                 fetched = true;
                 spinner.performClick();
