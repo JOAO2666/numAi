@@ -40,7 +40,7 @@ public class SettingsActivity extends Activity {
     boolean fetched = false;
     ArrayList<String> fetchedModels = null;
     String lastChatModel, lastThinkModel;
-    CheckBox shrinkThink, webSearch, webFetch;
+    CheckBox shrinkThink, webSearch, webFetch, disableToolsImg;
     String systemPrompt;
     EditText updateDelay;
 
@@ -112,6 +112,9 @@ public class SettingsActivity extends Activity {
         webFetch = (CheckBox) findViewById(R.id.webFetch);
         webFetch.setChecked(conf.isWebFetchEnabled());
 
+        disableToolsImg = (CheckBox) findViewById(R.id.disableToolsImg);
+        disableToolsImg.setChecked(conf.isDisableToolsWithImage());
+
         searchEngineSpinner = (Spinner) findViewById(R.id.search_engine_spinner);
         searchEngineSpinner.setSelection("duckduckgo".equalsIgnoreCase(conf.getSearchEngine()) ? 1 : 0);
 
@@ -137,6 +140,9 @@ public class SettingsActivity extends Activity {
             }
             if (savedInstanceState.containsKey("web_fetch") && webFetch != null) {
                 webFetch.setChecked(savedInstanceState.getBoolean("web_fetch"));
+            }
+            if (savedInstanceState.containsKey("disable_tools_img") && disableToolsImg != null) {
+                disableToolsImg.setChecked(savedInstanceState.getBoolean("disable_tools_img"));
             }
             if (savedInstanceState.containsKey("search_engine_pos") && searchEngineSpinner != null) {
                 searchEngineSpinner.setSelection(savedInstanceState.getInt("search_engine_pos"));
@@ -183,7 +189,8 @@ public class SettingsActivity extends Activity {
                             Integer.parseInt(updateDelay.getText().toString()),
                             webSearch.isChecked(),
                             searchEngineSpinner.getSelectedItem().toString().toLowerCase(),
-                            webFetch.isChecked()));
+                            webFetch.isChecked(),
+                            disableToolsImg.isChecked()));
                     Intent intent = new Intent(context, MainActivity.class);
                     startActivity(intent);
                     finish();
@@ -203,7 +210,8 @@ public class SettingsActivity extends Activity {
                                     Integer.parseInt(updateDelay.getText().toString()),
                                     webSearch.isChecked(),
                                     searchEngineSpinner.getSelectedItem().toString().toLowerCase(),
-                                    webFetch.isChecked()));
+                                    webFetch.isChecked(),
+                                    disableToolsImg.isChecked()));
                             loading.dismiss();
                             Intent intent = new Intent(context, MainActivity.class);
                             startActivity(intent);
@@ -281,6 +289,9 @@ public class SettingsActivity extends Activity {
         }
         if (webFetch != null) {
             outState.putBoolean("web_fetch", webFetch.isChecked());
+        }
+        if (disableToolsImg != null) {
+            outState.putBoolean("disable_tools_img", disableToolsImg.isChecked());
         }
         if (searchEngineSpinner != null) {
             outState.putInt("search_engine_pos", searchEngineSpinner.getSelectedItemPosition());

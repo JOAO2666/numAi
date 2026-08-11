@@ -10,15 +10,16 @@ public class Config {
     private int updateDelay;
     private boolean webSearchEnabled;
     private boolean webFetchEnabled;
+    private boolean disableToolsWithImage;
     private String searchEngine;
 
     public Config() {}
 
     public Config(String baseUrl, String apiKey, String chatModel, String thinkingModel, boolean shrinkThink, String systemPrompt, int updateDelay) {
-        this(baseUrl, apiKey, chatModel, thinkingModel, shrinkThink, systemPrompt, updateDelay, false, "bing", true);
+        this(baseUrl, apiKey, chatModel, thinkingModel, shrinkThink, systemPrompt, updateDelay, false, "bing", true, true);
     }
 
-    public Config(String baseUrl, String apiKey, String chatModel, String thinkingModel, boolean shrinkThink, String systemPrompt, int updateDelay, boolean webSearchEnabled, String searchEngine, boolean webFetchEnabled) {
+    public Config(String baseUrl, String apiKey, String chatModel, String thinkingModel, boolean shrinkThink, String systemPrompt, int updateDelay, boolean webSearchEnabled, String searchEngine, boolean webFetchEnabled, boolean disableToolsWithImage) {
         this.baseUrl = baseUrl;
         this.apiKey = apiKey;
         this.chatModel = chatModel;
@@ -29,6 +30,7 @@ public class Config {
         this.webSearchEnabled = webSearchEnabled;
         this.searchEngine = searchEngine;
         this.webFetchEnabled = webFetchEnabled;
+        this.disableToolsWithImage = disableToolsWithImage;
     }
 
     public String getBaseUrl() { return baseUrl; }
@@ -57,6 +59,9 @@ public class Config {
 
     public boolean isWebFetchEnabled() { return webFetchEnabled; }
     public void setWebFetchEnabled(boolean webFetchEnabled) { this.webFetchEnabled = webFetchEnabled; }
+
+    public boolean isDisableToolsWithImage() { return disableToolsWithImage; }
+    public void setDisableToolsWithImage(boolean disableToolsWithImage) { this.disableToolsWithImage = disableToolsWithImage; }
 
     public String getSearchEngine() { return searchEngine; }
     public void setSearchEngine(String searchEngine) { this.searchEngine = searchEngine; }

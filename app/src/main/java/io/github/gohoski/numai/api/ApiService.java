@@ -75,7 +75,10 @@ public class ApiService {
                                     JSONObject input = new JSONObject();
                                     input.put("type", "image_url");
                                     JSONObject imageUrl = new JSONObject();
-                                    imageUrl.put("url", image);
+
+                                    String base64Url = getBase64FromFilename(ctx, image);
+                                    imageUrl.put("url", base64Url != null ? base64Url : image);
+
                                     input.put("image_url", imageUrl);
                                     content.add(input);
                                 }
@@ -90,7 +93,8 @@ public class ApiService {
                     body.put("messages", messages);
                     body.put("stream", true);
 
-                    if (config.getConfig().isWebSearchEnabled() || config.getConfig().isWebFetchEnabled()) {
+                    if (!(hasImg && config.getConfig().isDisableToolsWithImage()) &&
+                            (config.getConfig().isWebSearchEnabled() || config.getConfig().isWebFetchEnabled())) {
                         JSONArray tools = new JSONArray();
 
                         if (config.getConfig().isWebSearchEnabled()) {

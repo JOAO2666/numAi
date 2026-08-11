@@ -66,4 +66,6 @@
     <string name="space_fail">儲存空間可能不足。請嘗試刪除舊聊天記錄後重試。</string>
     <string name="search_engine_">Bing 在 Android 1.0+ 上受支援。DuckDuckGo 在 Android &lt;4.4 上需要 Wolfius，並且可能回傳更多結果，但可能會被封鎖，因此建議使用 Bing。</string>
     <string name="regenerate">重新產生</string>
+    <string name="disable_tools_img">附加圖片時停用工具</string>
+    <string name="disable_tools_img_">啟用後，附加圖片時將不會向模型傳送網路搜尋與網路擷取工具，進而提高與視覺模型的相容性。</string>
 </resources>

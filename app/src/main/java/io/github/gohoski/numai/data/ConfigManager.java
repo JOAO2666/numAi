@@ -16,6 +16,7 @@ public class ConfigManager {
             KEY_UPDATE_DELAY = "updateDelay",
             KEY_WEB_SEARCH_ENABLED = "webSearchEnabled",
             KEY_WEB_FETCH_ENABLED = "webFetchEnabled",
+            KEY_DISABLE_TOOLS_WITH_IMAGE = "disableToolsWithImage",
             KEY_SEARCH_ENGINE = "searchEngine";
 
     private static ConfigManager instance;
@@ -49,7 +50,8 @@ public class ConfigManager {
                 preferences.getInt(KEY_UPDATE_DELAY, 250),
                 preferences.getBoolean(KEY_WEB_SEARCH_ENABLED, true),
                 preferences.getString(KEY_SEARCH_ENGINE, "bing"),
-                preferences.getBoolean(KEY_WEB_FETCH_ENABLED, Integer.parseInt(android.os.Build.VERSION.SDK) >= 4));
+                preferences.getBoolean(KEY_WEB_FETCH_ENABLED, Integer.parseInt(android.os.Build.VERSION.SDK) >= 4),
+                preferences.getBoolean(KEY_DISABLE_TOOLS_WITH_IMAGE, true));
     }
 
     private void saveConfig() {
@@ -63,6 +65,7 @@ public class ConfigManager {
         editor.putInt(KEY_UPDATE_DELAY, config.getUpdateDelay());
         editor.putBoolean(KEY_WEB_SEARCH_ENABLED, config.isWebSearchEnabled());
         editor.putBoolean(KEY_WEB_FETCH_ENABLED, config.isWebFetchEnabled());
+        editor.putBoolean(KEY_DISABLE_TOOLS_WITH_IMAGE, config.isDisableToolsWithImage());
         editor.putString(KEY_SEARCH_ENGINE, config.getSearchEngine());
         editor.commit();
     }

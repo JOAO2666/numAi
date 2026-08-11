@@ -53,6 +53,8 @@
     <string name="web_search">Enable web search</string>
     <string name="web_fetch">Enable web fetch</string>
     <string name="web_fetch_">Web fetch allows the LLM to retrieve web pages by URL. Wolfius is required for this to work correctly on Android &lt;4.4, which is why this function is only recommended for Android 1.6+. Complex websites may not work.</string>
+    <string name="disable_tools_img">Disable tools when an image is attached</string>
+    <string name="disable_tools_img_">When enabled, web search and web fetch tools are not sent to the model when an image is attached, which improves compatibility with vision models.</string>
     <string name="view_table">View table</string>
     <string name="generating_table">Generating table…</string>
     <string name="recommended">%s (Recommended)</string>

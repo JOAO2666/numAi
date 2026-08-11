@@ -67,4 +67,6 @@
     <string name="search_engine">Arama motoru</string>
     <string name="search_engine_">Bing, Android 1.0+ üzerinde desteklenir. DuckDuckGo, Android &lt;4.4 için Wolfius gerektirir ve daha fazla sonuç verebilir ancak engellenebilir; bu nedenle Bing kullanılması önerilir.</string>
     <string name="regenerate">Yeniden Oluştur</string>
+    <string name="disable_tools_img">Görsel eklendiğinde araçları devre dışı bırak</string>
+    <string name="disable_tools_img_">Etkinleştirildiğinde, bir görsel eklendiğinde web arama ve web getirme araçları modele gönderilmez; bu da görsel (vision) modelleriyle uyumluluğu artırır.</string>
 </resources>
