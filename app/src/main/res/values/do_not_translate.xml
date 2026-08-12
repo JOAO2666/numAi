@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string-array name="search_engines">
+    <string-array name="search_engines" translatable="false">
         <item>Bing</item>
         <item>DuckDuckGo</item>
     </string-array>

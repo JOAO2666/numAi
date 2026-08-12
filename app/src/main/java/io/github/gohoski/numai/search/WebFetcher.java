@@ -11,7 +11,7 @@ import io.github.gohoski.numai.api.ApiRequest;
 import io.github.gohoski.numai.api.ApiResponse;
 
 public class WebFetcher {
-    private static final int MAX_TEXT_LENGTH = 10000;
+    private static final int MAX_TEXT_LENGTH = 15000;
     private static final int MAX_HTML_BYTES = 512 * 1024;
     private ApiClient api;
 

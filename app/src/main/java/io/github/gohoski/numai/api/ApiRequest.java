@@ -13,6 +13,7 @@ public class ApiRequest {
     private Map<String, String> params;
     private String body;
     private String baseUrl;
+    private int readTimeout = 15000;
 
     public ApiRequest(String endpoint, String method) {
         this.endpoint = endpoint;
@@ -46,6 +47,12 @@ public class ApiRequest {
     public void setBody(String body) {
         this.body = body;
     }
+
+    public void setReadTimeout(int readTimeout) {
+        this.readTimeout = readTimeout;
+    }
+
+    public int getReadTimeout() { return readTimeout; }
 
     public String getEndpoint() {
         if (params == null || params.isEmpty()) {

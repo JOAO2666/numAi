@@ -37,56 +37,11 @@ public class ApiService {
             public void run() {
                 try {
                     ApiRequest request = new ApiRequest("/chat/completions", "POST");
-                    JSONArray messages = new JSONArray();
-                    String systemStr = config.getConfig().getSystemPrompt();
-                    if (systemStr.length() != 0) {
-                        JSONObject system = new JSONObject();
-                        system.put("role", "system");
-                        system.put("content", systemStr);
-                        messages.add(system);
-                    }
-                    boolean hasImg = false;
-                    for (Message message : msg) {
-                        JSONObject messageJson = new JSONObject();
-                        messageJson.put("role", message.getRole());
+                    request.setReadTimeout(40000);
+                    boolean[] hasImgHolder = new boolean[]{false};
+                    JSONArray messages = buildMessages(msg, hasImgHolder);
+                    boolean hasImg = hasImgHolder[0];
 
-                        if (message.getRoleEnum() == Role.TOOL) {
-                            messageJson.put("tool_call_id", message.getToolCallId());
-                            messageJson.put("content", message.getContent());
-                        } else if (message.getToolCalls() != null) {
-                            messageJson.put("tool_calls", message.getToolCalls());
-                            if (message.getContent() != null && message.getContent().trim().length() > 0) {
-                                messageJson.put("content", message.getContent());
-                            } else {
-                                messageJson.put("content", (String) null);
-                            }
-                        } else {
-                            List<String> inputImages = message.getInputImages();
-                            if (inputImages == null || inputImages.isEmpty()) {
-                                messageJson.put("content", message.getContent());
-                            } else {
-                                hasImg = true;
-                                JSONArray content = new JSONArray();
-                                JSONObject inputText = new JSONObject();
-                                inputText.put("type", "text");
-                                inputText.put("text", message.getContent());
-                                content.add(inputText);
-                                for (String image: inputImages) {
-                                    JSONObject input = new JSONObject();
-                                    input.put("type", "image_url");
-                                    JSONObject imageUrl = new JSONObject();
-
-                                    String base64Url = getBase64FromFilename(ctx, image);
-                                    imageUrl.put("url", base64Url != null ? base64Url : image);
-
-                                    input.put("image_url", imageUrl);
-                                    content.add(input);
-                                }
-                                messageJson.put("content", content);
-                            }
-                        }
-                        messages.add(messageJson);
-                    }
                     JSONObject body = new JSONObject();
                     final String model = thinking ? config.getConfig().getThinkingModel() : config.getConfig().getChatModel();
                     body.put("model", model);
@@ -192,6 +147,121 @@ public class ApiService {
                 }
             }
         }).start();
+    }
+
+    private JSONArray buildMessages(List<Message> rawMessages, boolean[] hasImgHolder) {
+        JSONArray messages = new JSONArray();
+        String systemStr = config.getConfig().getSystemPrompt();
+        if (systemStr != null && systemStr.trim().length() != 0) {
+            JSONObject system = new JSONObject();
+            system.put("role", "system");
+            system.put("content", systemStr);
+            messages.add(system);
+        }
+
+        int size = rawMessages.size();
+        for (int i = 0; i < size; i++) {
+            Message message = rawMessages.get(i);
+
+            if (message.getRoleEnum() == Role.TOOL) {
+                // Tool messages are formatted and included alongside their parent Assistant message
+                continue;
+            }
+
+            if (message.getRoleEnum() == Role.ASSISTANT && message.getToolCalls() != null && message.getToolCalls().size() > 0) {
+                List<Message> followingToolMsgs = new ArrayList<Message>();
+                for (int j = i + 1; j < size; j++) {
+                    Message nextMsg = rawMessages.get(j);
+                    if (nextMsg.getRoleEnum() == Role.TOOL) {
+                        followingToolMsgs.add(nextMsg);
+                    } else {
+                        break;
+                    }
+                }
+
+                JSONArray origToolCalls = message.getToolCalls();
+                JSONArray validToolCalls = new JSONArray();
+                List<Message> validToolMsgs = new ArrayList<Message>();
+
+                for (int k = 0; k < origToolCalls.size(); k++) {
+                    try {
+                        JSONObject tc = origToolCalls.getObject(k);
+                        if (tc != null && tc.has("id")) {
+                            String callId = tc.getString("id");
+                            Message matchingToolMsg = null;
+                            for (int m = 0; m < followingToolMsgs.size(); m++) {
+                                Message tm = followingToolMsgs.get(m);
+                                if (callId.equals(tm.getToolCallId())) {
+                                    matchingToolMsg = tm;
+                                    break;
+                                }
+                            }
+                            if (matchingToolMsg != null) {
+                                validToolCalls.add(tc);
+                                validToolMsgs.add(matchingToolMsg);
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+
+                if (validToolCalls.size() > 0) {
+                    JSONObject assistantJson = new JSONObject();
+                    assistantJson.put("role", "assistant");
+                    assistantJson.put("tool_calls", validToolCalls);
+                    if (message.getContent() != null && message.getContent().trim().length() > 0) {
+                        assistantJson.put("content", message.getContent());
+                    } else {
+                        assistantJson.put("content", (String) null);
+                    }
+                    messages.add(assistantJson);
+
+                    for (int m = 0; m < validToolMsgs.size(); m++) {
+                        Message tm = validToolMsgs.get(m);
+                        JSONObject toolJson = new JSONObject();
+                        toolJson.put("role", "tool");
+                        toolJson.put("tool_call_id", tm.getToolCallId());
+                        toolJson.put("content", tm.getContent() != null ? tm.getContent() : "");
+                        messages.add(toolJson);
+                    }
+                } else if (message.getContent() != null && message.getContent().trim().length() > 0) {
+                    JSONObject assistantJson = new JSONObject();
+                    assistantJson.put("role", "assistant");
+                    assistantJson.put("content", message.getContent());
+                    messages.add(assistantJson);
+                }
+
+            } else {
+                JSONObject messageJson = new JSONObject();
+                messageJson.put("role", message.getRole());
+                List<String> inputImages = message.getInputImages();
+                if (inputImages == null || inputImages.isEmpty()) {
+                    messageJson.put("content", message.getContent());
+                } else {
+                    hasImgHolder[0] = true;
+                    JSONArray content = new JSONArray();
+                    JSONObject inputText = new JSONObject();
+                    inputText.put("type", "text");
+                    inputText.put("text", message.getContent() != null ? message.getContent() : "");
+                    content.add(inputText);
+                    for (int k = 0; k < inputImages.size(); k++) {
+                        String image = inputImages.get(k);
+                        JSONObject input = new JSONObject();
+                        input.put("type", "image_url");
+                        JSONObject imageUrl = new JSONObject();
+
+                        String base64Url = getBase64FromFilename(ctx, image);
+                        imageUrl.put("url", base64Url != null ? base64Url : image);
+
+                        input.put("image_url", imageUrl);
+                        content.add(input);
+                    }
+                    messageJson.put("content", content);
+                }
+                messages.add(messageJson);
+            }
+        }
+
+        return messages;
     }
 
     public void getModels(final ApiCallback<ArrayList<String>> callback) {

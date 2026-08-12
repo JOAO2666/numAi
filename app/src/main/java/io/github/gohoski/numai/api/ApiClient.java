@@ -61,26 +61,39 @@ public class ApiClient {
                 }
                 connection.setRequestProperty("User-Agent", "numAi/" + BuildConfig.VERSION_NAME + " (https://github.com/gohoski/numAi)");
                 connection.setRequestProperty("Accept", "application/json");
+//                connection.setRequestProperty("Connection", "close");
 
                 for (Map.Entry<String, String> entry : request.getHeaders().entrySet()) {
                     connection.setRequestProperty(entry.getKey(), entry.getValue());
                 }
 
+                byte[] bodyBytes = null;
                 if ("POST".equals(request.getMethod())) {
                     if (!request.getHeaders().containsKey("Content-Type")) {
                         connection.setRequestProperty("Content-Type", "application/json");
                     }
                     connection.setDoOutput(true);
+                    if (request.getBody() != null && request.getBody().length() > 0) {
+                        try {
+                            bodyBytes = request.getBody().getBytes("UTF-8");
+                        } catch (java.io.UnsupportedEncodingException e) {
+                            bodyBytes = request.getBody().getBytes();
+                        }
+                    } else {
+                        bodyBytes = new byte[0];
+                    }
+                    connection.setRequestProperty("Content-Length", String.valueOf(bodyBytes.length));
+                    connection.setFixedLengthStreamingMode(bodyBytes.length);
                 }
 
                 connection.setConnectTimeout(12000);
-                connection.setReadTimeout(40000);
+                connection.setReadTimeout(request.getReadTimeout());
 
-                if ("POST".equals(request.getMethod()) && request.getBody() != null && request.getBody().length() != 0) {
+                if ("POST".equals(request.getMethod()) && bodyBytes != null && bodyBytes.length > 0) {
                     OutputStream outputStream = null;
                     try {
                         outputStream = connection.getOutputStream();
-                        outputStream.write(request.getBody().getBytes());
+                        outputStream.write(bodyBytes);
                         outputStream.flush();
                     } finally {
                         if (outputStream != null) {
@@ -160,7 +173,7 @@ public class ApiClient {
             if (context != null) {
                 errMsg = context.getString(R.string.errorNetwork, e.getMessage());
             }
-            throw new ApiError(errMsg);
+            throw new ApiError(errMsg, e instanceof java.net.SocketTimeoutException);
         }
     }
 

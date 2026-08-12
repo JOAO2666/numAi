@@ -68,7 +68,7 @@ class Bing implements SearchEngine {
                 .addParam("form", "QBLH");
         addStandardHeaders(request);
 
-        ApiResponse response = api.execute(request);
+        ApiResponse response = executeWithRetry(request);
         updateCookiesFromResponse(response);
         String html = readResponseAsString(response);
         String queryUrl = request.getBaseUrl() + request.getEndpoint();
@@ -135,7 +135,7 @@ class Bing implements SearchEngine {
             verifyReq.addHeader("Origin", "http://www.bing.com");
             verifyReq.addHeader("Referer", queryUrl);
 
-            ApiResponse verifyResp = api.execute(verifyReq);
+            ApiResponse verifyResp = executeWithRetry(verifyReq);
             updateCookiesFromResponse(verifyResp);
             closeResponseBody(verifyResp);
 
@@ -153,7 +153,7 @@ class Bing implements SearchEngine {
             bdReq.addHeader("Origin", "https://www.bing.com");
             bdReq.addHeader("Referer", "https://www.bing.com/");
             bdReq.addHeader("Sec-Fetch-Site", "same-site");
-            ApiResponse bdResp = api.execute(bdReq);
+            ApiResponse bdResp = executeWithRetry(bdReq);
             updateCookiesFromResponse(bdResp);
             closeResponseBody(bdResp);
 
@@ -167,7 +167,7 @@ class Bing implements SearchEngine {
                     .addParam("ajaxreq", "1");
             addStandardHeaders(sbiReq);
             sbiReq.addHeader("Referer", queryUrl);
-            ApiResponse sbiResp = api.execute(sbiReq);
+            ApiResponse sbiResp = executeWithRetry(sbiReq);
             updateCookiesFromResponse(sbiResp);
             closeResponseBody(sbiResp);
 
@@ -199,7 +199,7 @@ class Bing implements SearchEngine {
             addStandardHeaders(finalReq);
             finalReq.addHeader("Referer", queryUrl);
 
-            ApiResponse finalResp = api.execute(finalReq);
+            ApiResponse finalResp = executeWithRetry(finalReq);
             updateCookiesFromResponse(finalResp);
             html = readResponseAsString(finalResp);
         }
@@ -225,7 +225,7 @@ class Bing implements SearchEngine {
             addStandardHeaders(retryReq);
             retryReq.addHeader("Referer", queryUrl);
 
-            ApiResponse retryResp = api.execute(retryReq);
+            ApiResponse retryResp = executeWithRetry(retryReq);
             updateCookiesFromResponse(retryResp);
             html = readResponseAsString(retryResp);
             results = parse(html);
@@ -233,6 +233,23 @@ class Bing implements SearchEngine {
 
         Log.i("Bing", "HTML downloaded");
         return results;
+    }
+
+    private ApiResponse executeWithRetry(ApiRequest request) throws ApiError {
+        final int maxAttempts = 3;
+        ApiError lastError = null;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                return api.execute(request);
+            } catch (ApiError e) {
+                lastError = e;
+                if (!e.isTimeout()) {
+                    throw e;
+                }
+                Log.w("Bing", "Timeout on attempt " + attempt + "/" + maxAttempts + ": " + e.getMessage());
+            }
+        }
+        throw lastError;
     }
 
     private void addStandardHeaders(ApiRequest request) {
@@ -431,7 +448,7 @@ class Bing implements SearchEngine {
             addStandardHeaders(finalLsReq);
             finalLsReq.addHeader("Referer", queryUrl);
 
-            ApiResponse resp = api.execute(finalLsReq);
+            ApiResponse resp = executeWithRetry(finalLsReq);
             updateCookiesFromResponse(resp);
             closeResponseBody(resp);
         } catch (Exception e) {
@@ -486,7 +503,7 @@ class Bing implements SearchEngine {
             request.addHeader("Content-Type", "text/xml");
             request.addHeader("Referer", queryUrl);
 
-            ApiResponse response = api.execute(request);
+            ApiResponse response = executeWithRetry(request);
             updateCookiesFromResponse(response);
             closeResponseBody(response);
         } catch (Exception e) {

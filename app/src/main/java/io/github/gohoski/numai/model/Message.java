@@ -244,11 +244,17 @@ public class Message {
 
         Message message = new Message(role, content, inputImages, llm);
         if (json.has("toolCalls")) {
-            message.setToolCalls(json.getArray("toolCalls"));
+            message.setToolCalls(json.getNullableArray("toolCalls"));
+        } else if (json.has("tool_calls")) {
+            message.setToolCalls(json.getNullableArray("tool_calls"));
         }
+
         if (json.has("toolCallId")) {
             message.setToolCallId(json.getNullableString("toolCallId"));
+        } else if (json.has("tool_call_id")) {
+            message.setToolCallId(json.getNullableString("tool_call_id"));
         }
+
         if (json.has("searchResultCount")) {
             message.setSearchResultCount(json.getInt("searchResultCount", -1));
         }

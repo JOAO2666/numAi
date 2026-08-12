@@ -9,6 +9,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Looper;
 import android.text.ClipboardManager;
@@ -41,6 +42,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -79,14 +81,15 @@ public class MainActivity extends Activity {
     private ToggleButton thinkingToggle;
     private ProgressBar progressBar;
     private TextView imgCount;
-    private ImageButton attachBtn;
     private boolean autoScroll = true;
     private boolean isGenerating = false;
     private boolean isThinkingState = false;
     private InputStream currentStream;
     private volatile boolean isCancelled = false;
+    private volatile int currentGenerationId = 0;
     int UPDATE_DELAY_MS = 250;
 
+    private ImageButton attachBtn;
     private final Object bufferLock = new Object();
     private final StringBuilder thinkBuffer = new StringBuilder();
     private final StringBuilder contentBuffer = new StringBuilder();
@@ -103,6 +106,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         SSLDisabler.disableSSLCertificateChecking();
+        System.setProperty("http.keepAlive", "false");
 
         config = ConfigManager.getInstance(this);
         if (config.getConfig().getApiKey().length() == 0) {
@@ -193,9 +197,8 @@ public class MainActivity extends Activity {
     }
 
     private void regenerateFromMessage(final Message selectedMsg) {
-        if (isGenerating) {
-            stopGeneration();
-        }
+        stopGeneration();
+
         List<Message> msgs = MessageManager.getInstance().getMessages();
         int index = msgs.indexOf(selectedMsg);
         if (index == -1) return;
@@ -213,7 +216,6 @@ public class MainActivity extends Activity {
         if (msgs.isEmpty()) return;
 
         autoScroll = true;
-        isCancelled = false;
         currentStream = null;
 
         sendBtn.setImageResource(R.drawable.ic_action_stop);
@@ -246,6 +248,7 @@ public class MainActivity extends Activity {
                 finish();
                 return true;
             case R.id.exit:
+                currentGenerationId++;
                 isCancelled = true;
                 if (currentStream != null) {
                     try {
@@ -319,6 +322,25 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void hideKeyboard() {
+        if (Integer.parseInt(Build.VERSION.SDK) >= 3 && input != null) {
+            try {
+                Class<?> immClass = Class.forName("android.view.inputmethod.InputMethodManager");
+                Object imm = getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (imm != null) {
+                    Method hideMethod = immClass.getMethod(
+                            "hideSoftInputFromWindow",
+                            android.os.IBinder.class,
+                            Integer.TYPE
+                    );
+                    hideMethod.invoke(imm, input.getWindowToken(), 0);
+                }
+            } catch (Exception e) {
+                Log.e("MainActivity", "Failed to hide soft keyboard", e);
+            }
+        }
+    }
+
     private void showChatsDialog() {
         final List<Chat> sortedChats = ChatManager.getInstance().getSortedChats();
         List<String> optionsList = new ArrayList<String>();
@@ -333,6 +355,7 @@ public class MainActivity extends Activity {
                 .setItems(options, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
+                        stopGeneration();
                         if (which == 0) {
                             ChatManager.getInstance().startNewChat();
                             refreshMessageAdapter();
@@ -352,6 +375,7 @@ public class MainActivity extends Activity {
                 .setItems(actions, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
+                        stopGeneration();
                         if (which == 0) {
                             ChatManager.getInstance().setCurrentChat(MainActivity.this, chat);
                             refreshMessageAdapter();
@@ -370,6 +394,7 @@ public class MainActivity extends Activity {
                 .setPositiveButton(R.string.delete, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
+                        stopGeneration();
                         ChatManager.getInstance().deleteChat(MainActivity.this, chat);
                         refreshMessageAdapter();
                     }
@@ -446,16 +471,23 @@ public class MainActivity extends Activity {
     }
 
     private void stopGeneration() {
+        currentGenerationId++;
         isCancelled = true;
+        if (currentStream != null) {
+            try {
+                currentStream.close();
+            } catch (IOException ignored) {}
+            currentStream = null;
+        }
 
         List<Message> msgs = MessageManager.getInstance().getMessages();
         int size = msgs.size();
         if (size > 0 && msgs.get(size - 1).getRole().equals(Role.ASSISTANT.toString())) {
-            msgs.remove(size - 1);
-            size--;
-        }
-        if (size > 0 && msgs.get(size - 1).getRole().equals(Role.USER.toString())) {
-            msgs.remove(size - 1);
+            Message lastMsg = msgs.get(size - 1);
+            if ((lastMsg.getContent() == null || lastMsg.getContent().length() == 0) &&
+                    (lastMsg.getToolCalls() == null || lastMsg.getToolCalls().size() == 0)) {
+                msgs.remove(size - 1);
+            }
         }
         resetUIState();
         ChatManager.getInstance().onMessageAdded(this);
@@ -471,12 +503,14 @@ public class MainActivity extends Activity {
     private void sendMessage() {
         String text = input.getText().toString().trim();
         if (text.length() == 0 && inputImages.isEmpty()) return;
+        if (isGenerating) {
+            stopGeneration();
+        }
+        hideKeyboard();
         autoScroll = true;
-        isCancelled = false;
         currentStream = null;
         MessageManager.getInstance().addMessage(new Message(Role.USER, text, new ArrayList<String>(inputImages), null));
         ChatManager.getInstance().onMessageAdded(this);
-
         input.setText("");
         sendBtn.setImageResource(R.drawable.ic_action_stop);
         input.setEnabled(false);
@@ -487,7 +521,6 @@ public class MainActivity extends Activity {
         adapter.notifyDataSetChanged();
         updateEmptyState();
         scrollToBottom();
-
         requestAICompletion();
     }
 
@@ -498,23 +531,27 @@ public class MainActivity extends Activity {
         }
         isThinkingState = false;
         isGenerating = true;
+        isCancelled = false;
+        final int genId = ++currentGenerationId;
         final boolean thinkingEnabled = thinkingToggle.isChecked();
 
         apiService.chatCompletion(MessageManager.getInstance().getMessages(), thinkingEnabled, new ApiCallback<ApiResult>() {
             @Override
             public void onSuccess(final ApiResult apiResult) {
-                if (isCancelled) return;
+                if (genId != currentGenerationId || isCancelled) return;
                 runOnUiThread(new Runnable() {
                     public void run() {
-                        startResponseStream(apiResult.getResult(), apiResult.getModel(), thinkingEnabled);
+                        if (genId != currentGenerationId || isCancelled) return;
+                        startResponseStream(genId, apiResult.getResult(), apiResult.getModel(), thinkingEnabled);
                     }
                 });
             }
             @Override
             public void onError(final ApiError error) {
-                if (isCancelled) return;
+                if (genId != currentGenerationId || isCancelled) return;
                 runOnUiThread(new Runnable() {
                     public void run() {
+                        if (genId != currentGenerationId || isCancelled) return;
                         handleStreamError(error.getMessage());
                     }
                 });
@@ -522,7 +559,13 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void startResponseStream(final InputStream stream, String model, final boolean thinkingEnabled) {
+    private void startResponseStream(final int genId, final InputStream stream, String model, final boolean thinkingEnabled) {
+        if (genId != currentGenerationId || isCancelled) {
+            if (stream != null) {
+                try { stream.close(); } catch (IOException ignored) {}
+            }
+            return;
+        }
         this.currentStream = stream;
         progressBar.setVisibility(View.GONE);
         final Message msg = new Message(Role.ASSISTANT, "", model);
@@ -533,9 +576,9 @@ public class MainActivity extends Activity {
         new Thread(new Runnable() {
             public void run() {
                 try {
-                    readStream(stream, msg, thinkingEnabled);
+                    readStream(genId, stream, msg, thinkingEnabled);
                 } catch (Exception e) {
-                    if (isGenerating && !isCancelled) {
+                    if (genId == currentGenerationId && isGenerating && !isCancelled) {
                         final String err = e.getMessage();
                         runOnUiThread(new Runnable() { public void run() { handleStreamError(err); } });
                     }
@@ -565,13 +608,13 @@ public class MainActivity extends Activity {
         progressBar.setVisibility(View.GONE);
     }
 
-    private void readStream(InputStream inputStream, final Message msg, final boolean thinkingEnabled) throws IOException {
+    private void readStream(final int genId, InputStream inputStream, final Message msg, final boolean thinkingEnabled) throws IOException {
         BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8192);
         String line;
         long lastUpdateTime = 0;
         List<StreamToolCall> streamToolCalls = new ArrayList<StreamToolCall>();
 
-        while (!isCancelled && (line = reader.readLine()) != null) {
+        while (genId == currentGenerationId && !isCancelled && (line = reader.readLine()) != null) {
             if (!line.startsWith("data:")) continue;
             String jsonData = line.substring(5).trim();
             if ("[DONE]".equals(jsonData)) break;
@@ -666,14 +709,15 @@ public class MainActivity extends Activity {
                 Log.e("readStream", "error parsing chunk " + jsonData, e);
             }
         }
-        if (isCancelled) return;
+        if (genId != currentGenerationId || isCancelled) return;
 
         final List<StreamToolCall> finalToolCalls = streamToolCalls;
         runOnUiThread(new Runnable() {
             public void run() {
+                if (genId != currentGenerationId || isCancelled) return;
                 updateStreamUI(msg, thinkingEnabled, true);
                 if (!finalToolCalls.isEmpty()) {
-                    executeToolCalls(msg, finalToolCalls);
+                    executeToolCalls(genId, msg, finalToolCalls);
                 } else {
                     ChatManager.getInstance().onMessageAdded(MainActivity.this);
                     resetUIState();
@@ -682,7 +726,9 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void executeToolCalls(final Message assistantMsg, final List<StreamToolCall> toolCalls) {
+    private void executeToolCalls(final int genId, final Message assistantMsg, final List<StreamToolCall> toolCalls) {
+        if (genId != currentGenerationId || isCancelled) return;
+
         JSONArray toolCallsArray = new JSONArray();
         final List<StreamToolCall> executableCalls = new ArrayList<StreamToolCall>();
 
@@ -711,9 +757,12 @@ public class MainActivity extends Activity {
             return;
         }
 
+        final Chat targetChat = ChatManager.getInstance().getCurrentChat();
+
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                if (genId != currentGenerationId || isCancelled) return;
                 adapter.notifyDataSetChanged();
                 scrollToBottom();
             }
@@ -726,6 +775,9 @@ public class MainActivity extends Activity {
                 WebFetcher webFetcher = new WebFetcher();
 
                 for (int i = 0; i < executableCalls.size(); i++) {
+                    if (genId != currentGenerationId || isCancelled || ChatManager.getInstance().getCurrentChat() != targetChat) {
+                        return;
+                    }
                     StreamToolCall stc = executableCalls.get(i);
                     String callId = stc.id;
                     String resultText;
@@ -775,9 +827,12 @@ public class MainActivity extends Activity {
                         resultText = "{\"status\": \"error\", \"message\": \"Unsupported tool call\"}";
                     }
                     Log.i("Tool", resultText);
+                    if (genId != currentGenerationId || isCancelled || ChatManager.getInstance().getCurrentChat() != targetChat) {
+                        return;
+                    }
                     Message toolMessage = new Message(Role.TOOL, resultText);
                     toolMessage.setToolCallId(callId);
-                    MessageManager.getInstance().addMessage(toolMessage);
+                    targetChat.getMessages().add(toolMessage);
                 }
 
                 assistantMsg.setSearchResultCount(totalResults);
@@ -785,12 +840,11 @@ public class MainActivity extends Activity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        adapter.notifyDataSetChanged();
-                        if (!isCancelled) {
-                            requestAICompletion();
-                        } else {
-                            resetUIState();
+                        if (genId != currentGenerationId || isCancelled || ChatManager.getInstance().getCurrentChat() != targetChat) {
+                            return;
                         }
+                        adapter.notifyDataSetChanged();
+                        requestAICompletion();
                     }
                 });
             }
