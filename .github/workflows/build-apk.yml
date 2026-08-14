@@ -1,0 +1,78 @@
+name: Build test APK
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/build-apk.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Build Android test APK
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 8
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Install Android SDK 25
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-25" "build-tools;25.0.0"
+
+      - name: Configure separate test package
+        shell: bash
+        run: |
+          sed -i 's/applicationId "io.github.gohoski.numai"/applicationId "io.github.gohoski.numai.multipleimages"/' app/build.gradle
+          grep 'applicationId "io.github.gohoski.numai.multipleimages"' app/build.gradle
+
+      - name: Build debug APK
+        shell: bash
+        env:
+          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dhttps.protocols=TLSv1.2
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Prepare APK file
+        shell: bash
+        run: |
+          APK_PATH="$(find app/build/outputs/apk -type f -name '*.apk' | head -n 1)"
+          test -n "$APK_PATH"
+          cp "$APK_PATH" numAi-multiple-images-debug.apk
+          ls -lh numAi-multiple-images-debug.apk
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: numAi-multiple-images-apk
+          path: numAi-multiple-images-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: numAi-multiple-images-${{ github.run_number }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            numAi-multiple-images-debug.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "numAi teste - selecao multipla (build $GITHUB_RUN_NUMBER)" \
+            --notes "APK de teste com selecao de varias imagens. Ele usa um identificador separado e pode ser instalado ao lado do numAi original." \
+            --prerelease
