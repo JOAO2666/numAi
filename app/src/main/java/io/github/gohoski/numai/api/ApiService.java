@@ -163,79 +163,104 @@ public class ApiService {
         for (int i = 0; i < size; i++) {
             Message message = rawMessages.get(i);
 
-            if (message.getRoleEnum() == Role.TOOL) {
-                // Tool messages are formatted and included alongside their parent Assistant message
+            // Skip messages marked as error
+            if (message.isError()) {
                 continue;
             }
 
-            if (message.getRoleEnum() == Role.ASSISTANT && message.getToolCalls() != null && message.getToolCalls().size() > 0) {
-                List<Message> followingToolMsgs = new ArrayList<Message>();
-                for (int j = i + 1; j < size; j++) {
-                    Message nextMsg = rawMessages.get(j);
-                    if (nextMsg.getRoleEnum() == Role.TOOL) {
-                        followingToolMsgs.add(nextMsg);
-                    } else {
-                        break;
-                    }
-                }
+            if (message.getRoleEnum() == Role.TOOL) {
+                // Tool messages are paired with their parent assistant message
+                continue;
+            }
 
+            if (message.getRoleEnum() == Role.ASSISTANT) {
                 JSONArray origToolCalls = message.getToolCalls();
-                JSONArray validToolCalls = new JSONArray();
-                List<Message> validToolMsgs = new ArrayList<Message>();
+                if (origToolCalls != null && origToolCalls.size() > 0) {
+                    List<Message> followingToolMsgs = new ArrayList<Message>();
+                    for (int j = i + 1; j < size; j++) {
+                        Message nextMsg = rawMessages.get(j);
+                        if (nextMsg.getRoleEnum() == Role.TOOL) {
+                            followingToolMsgs.add(nextMsg);
+                        } else {
+                            break;
+                        }
+                    }
 
-                for (int k = 0; k < origToolCalls.size(); k++) {
-                    try {
-                        JSONObject tc = origToolCalls.getObject(k);
-                        if (tc != null && tc.has("id")) {
-                            String callId = tc.getString("id");
-                            Message matchingToolMsg = null;
-                            for (int m = 0; m < followingToolMsgs.size(); m++) {
-                                Message tm = followingToolMsgs.get(m);
-                                if (callId.equals(tm.getToolCallId())) {
-                                    matchingToolMsg = tm;
-                                    break;
+                    JSONArray validToolCalls = new JSONArray();
+                    List<Message> validToolMsgs = new ArrayList<Message>();
+
+                    for (int k = 0; k < origToolCalls.size(); k++) {
+                        try {
+                            JSONObject tc = origToolCalls.getObject(k);
+                            if (tc != null && tc.has("id")) {
+                                String callId = tc.getString("id");
+                                Message matchingToolMsg = null;
+                                for (int m = 0; m < followingToolMsgs.size(); m++) {
+                                    Message tm = followingToolMsgs.get(m);
+                                    if (callId.equals(tm.getToolCallId())) {
+                                        matchingToolMsg = tm;
+                                        break;
+                                    }
+                                }
+                                if (matchingToolMsg != null) {
+                                    validToolCalls.add(tc);
+                                    validToolMsgs.add(matchingToolMsg);
                                 }
                             }
-                            if (matchingToolMsg != null) {
-                                validToolCalls.add(tc);
-                                validToolMsgs.add(matchingToolMsg);
-                            }
+                        } catch (Exception ignored) {}
+                    }
+
+                    // Only send tool_calls if ALL calls in the turn have matching responses
+                    if (validToolCalls.size() > 0 && validToolCalls.size() == origToolCalls.size()) {
+                        JSONObject assistantJson = new JSONObject();
+                        assistantJson.put("role", "assistant");
+                        assistantJson.put("tool_calls", validToolCalls);
+
+                        String display = message.getDisplayRaw();
+                        assistantJson.put("content", (display != null && display.length() > 0) ? display : "");
+
+                        String think = message.getThinkingRaw();
+                        if (think != null && think.length() > 0) {
+                            assistantJson.put("reasoning_content", think);
+                            assistantJson.put("reasoning", think);
                         }
-                    } catch (Exception ignored) {}
+                        messages.add(assistantJson);
+
+                        for (int m = 0; m < validToolMsgs.size(); m++) {
+                            Message tm = validToolMsgs.get(m);
+                            JSONObject toolJson = new JSONObject();
+                            toolJson.put("role", "tool");
+                            toolJson.put("tool_call_id", tm.getToolCallId());
+                            toolJson.put("content", tm.getContent() != null ? tm.getContent() : "");
+                            messages.add(toolJson);
+                        }
+                        continue;
+                    }
                 }
 
-                if (validToolCalls.size() > 0) {
-                    JSONObject assistantJson = new JSONObject();
-                    assistantJson.put("role", "assistant");
-                    assistantJson.put("tool_calls", validToolCalls);
-                    if (message.getContent() != null && message.getContent().trim().length() > 0) {
-                        assistantJson.put("content", message.getContent());
-                    } else {
-                        assistantJson.put("content", (String) null);
-                    }
-                    messages.add(assistantJson);
+                // Standard assistant message or assistant turn where incomplete tool calls were stripped
+                String display = message.getDisplayRaw();
+                String think = message.getThinkingRaw();
 
-                    for (int m = 0; m < validToolMsgs.size(); m++) {
-                        Message tm = validToolMsgs.get(m);
-                        JSONObject toolJson = new JSONObject();
-                        toolJson.put("role", "tool");
-                        toolJson.put("tool_call_id", tm.getToolCallId());
-                        toolJson.put("content", tm.getContent() != null ? tm.getContent() : "");
-                        messages.add(toolJson);
-                    }
-                } else if (message.getContent() != null && message.getContent().trim().length() > 0) {
-                    JSONObject assistantJson = new JSONObject();
-                    assistantJson.put("role", "assistant");
-                    assistantJson.put("content", message.getContent());
-                    messages.add(assistantJson);
+                if ((display == null || display.trim().length() == 0) && (think == null || think.trim().length() == 0)) {
+                    continue;
                 }
+
+                JSONObject assistantJson = new JSONObject();
+                assistantJson.put("role", "assistant");
+                assistantJson.put("content", display != null ? display : "");
+                if (think != null && think.length() > 0) {
+                    assistantJson.put("reasoning_content", think);
+                    assistantJson.put("reasoning", think);
+                }
+                messages.add(assistantJson);
 
             } else {
                 JSONObject messageJson = new JSONObject();
                 messageJson.put("role", message.getRole());
                 List<String> inputImages = message.getInputImages();
                 if (inputImages == null || inputImages.isEmpty()) {
-                    messageJson.put("content", message.getContent());
+                    messageJson.put("content", message.getContent() != null ? message.getContent() : "");
                 } else {
                     hasImgHolder[0] = true;
                     JSONArray content = new JSONArray();

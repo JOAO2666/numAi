@@ -197,6 +197,10 @@ public class Message {
         isError = true;
     }
 
+    public boolean isError() {
+        return isError;
+    }
+
     public JSONObject toJSONObject() {
         JSONObject json = new JSONObject();
         json.put("role", role.toString());

@@ -201,7 +201,9 @@ class Bing implements SearchEngine {
 
             ApiResponse finalResp = executeWithRetry(finalReq);
             updateCookiesFromResponse(finalResp);
-            html = readResponseAsString(finalResp);
+            try {
+                html = readResponseAsString(finalResp);
+            } catch (Exception _) { html = ""; _.printStackTrace(); }
         }
 
         List<SearchResult> results = parse(html);

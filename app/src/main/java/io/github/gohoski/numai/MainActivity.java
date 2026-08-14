@@ -70,6 +70,20 @@ import io.github.gohoski.numai.util.SSLDisabler;
 public class MainActivity extends Activity {
     private static final int REQUEST_CODE_PICK_IMAGE = 1;
 
+    // Static process-wide generation state across activity lifecycles
+    private static volatile MainActivity currentActivityInstance = null;
+    private static volatile int globalGenerationId = 0;
+    private static volatile boolean globalCancelled = false;
+    private static volatile InputStream globalCurrentStream = null;
+    private static volatile boolean isGenerating = false;
+    private static volatile boolean isThinkingState = false;
+    private static volatile boolean isThinkingEnabled = false;
+    private static volatile Message currentAssistantMsg = null;
+
+    private static final Object bufferLock = new Object();
+    private static final StringBuilder thinkBuffer = new StringBuilder();
+    private static final StringBuilder contentBuffer = new StringBuilder();
+
     private ApiService apiService;
     private ConfigManager config;
 
@@ -82,17 +96,9 @@ public class MainActivity extends Activity {
     private ProgressBar progressBar;
     private TextView imgCount;
     private boolean autoScroll = true;
-    private boolean isGenerating = false;
-    private boolean isThinkingState = false;
-    private InputStream currentStream;
-    private volatile boolean isCancelled = false;
-    private volatile int currentGenerationId = 0;
     int UPDATE_DELAY_MS = 250;
 
     private ImageButton attachBtn;
-    private final Object bufferLock = new Object();
-    private final StringBuilder thinkBuffer = new StringBuilder();
-    private final StringBuilder contentBuffer = new StringBuilder();
     private final List<String> inputImages = new ArrayList<String>();
 
     private static class StreamToolCall {
@@ -101,9 +107,17 @@ public class MainActivity extends Activity {
         StringBuilder arguments = new StringBuilder();
     }
 
+    private static void runOnCurrentActivity(Runnable r) {
+        MainActivity act = currentActivityInstance;
+        if (act != null) {
+            act.runOnUiThread(r);
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        currentActivityInstance = this;
         setContentView(R.layout.activity_main);
         SSLDisabler.disableSSLCertificateChecking();
         System.setProperty("http.keepAlive", "false");
@@ -194,6 +208,47 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
+
+        // Restore generating state across rotation
+        if (isGenerating) {
+            sendBtn.setImageResource(R.drawable.ic_action_stop);
+            input.setEnabled(false);
+            attachBtn.setEnabled(false);
+            thinkingToggle.setChecked(isThinkingEnabled);
+            if (currentAssistantMsg == null) {
+                progressBar.setVisibility(View.VISIBLE);
+            } else {
+                progressBar.setVisibility(View.GONE);
+                updateStreamUI(currentAssistantMsg, isThinkingEnabled, false);
+            }
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        currentActivityInstance = this;
+        if (isGenerating) {
+            if (adapter != null) {
+                adapter.notifyDataSetChanged();
+            }
+            if (currentAssistantMsg != null) {
+                updateStreamUI(currentAssistantMsg, isThinkingEnabled, false);
+            }
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (currentActivityInstance == this) {
+            currentActivityInstance = null;
+        }
+        // Only terminate generation if the user is truly leaving the activity (e.g. Back pressed),
+        // not when rotating (configuration change where isFinishing() is false)
+        if (isFinishing()) {
+            stopGeneration();
+        }
     }
 
     private void regenerateFromMessage(final Message selectedMsg) {
@@ -213,11 +268,18 @@ public class MainActivity extends Activity {
             }
         }
 
+        // Clean up any trailing orphaned tool messages
+        while (!msgs.isEmpty() && msgs.get(msgs.size() - 1).getRoleEnum() == Role.TOOL) {
+            msgs.remove(msgs.size() - 1);
+        }
+        if (!msgs.isEmpty() && msgs.get(msgs.size() - 1).getRoleEnum() == Role.ASSISTANT) {
+            Message last = msgs.get(msgs.size() - 1);
+            last.setToolCalls(null);
+        }
+
         if (msgs.isEmpty()) return;
 
         autoScroll = true;
-        currentStream = null;
-
         sendBtn.setImageResource(R.drawable.ic_action_stop);
         input.setEnabled(false);
         attachBtn.setEnabled(false);
@@ -248,13 +310,7 @@ public class MainActivity extends Activity {
                 finish();
                 return true;
             case R.id.exit:
-                currentGenerationId++;
-                isCancelled = true;
-                if (currentStream != null) {
-                    try {
-                        currentStream.close();
-                    } catch (IOException ignored) {}
-                }
+                stopGeneration();
                 android.os.Process.killProcess(android.os.Process.myPid());
                 return true;
             case R.id.about:
@@ -412,6 +468,7 @@ public class MainActivity extends Activity {
     }
 
     private void updateEmptyState() {
+        if (adapter == null || helloLayout == null || msgList == null) return;
         boolean hasMessages = adapter.getCount() > 0;
         helloLayout.setVisibility(hasMessages ? View.GONE : View.VISIBLE);
         msgList.setVisibility(hasMessages ? View.VISIBLE : View.GONE);
@@ -454,11 +511,13 @@ public class MainActivity extends Activity {
     }
 
     private void scrollToBottom() {
-        if (!autoScroll) return;
+        if (!autoScroll || msgList == null || adapter == null) return;
         msgList.post(new Runnable() {
             public void run() {
+                if (msgList == null || adapter == null) return;
                 msgList.post(new Runnable() {
                     public void run() {
+                        if (msgList == null || adapter == null) return;
                         adapter.notifyDataSetChanged();
                         int count = adapter.getCount();
                         if (count > 0) {
@@ -471,33 +530,56 @@ public class MainActivity extends Activity {
     }
 
     private void stopGeneration() {
-        currentGenerationId++;
-        isCancelled = true;
-        if (currentStream != null) {
+        globalGenerationId++;
+        globalCancelled = true;
+        isGenerating = false;
+        currentAssistantMsg = null;
+        synchronized (bufferLock) {
+            thinkBuffer.setLength(0);
+            contentBuffer.setLength(0);
+        }
+        if (globalCurrentStream != null) {
             try {
-                currentStream.close();
+                globalCurrentStream.close();
             } catch (IOException ignored) {}
-            currentStream = null;
+            globalCurrentStream = null;
         }
 
-        List<Message> msgs = MessageManager.getInstance().getMessages();
-        int size = msgs.size();
-        if (size > 0 && msgs.get(size - 1).getRole().equals(Role.ASSISTANT.toString())) {
-            Message lastMsg = msgs.get(size - 1);
-            if ((lastMsg.getContent() == null || lastMsg.getContent().length() == 0) &&
-                    (lastMsg.getToolCalls() == null || lastMsg.getToolCalls().size() == 0)) {
-                msgs.remove(size - 1);
+        // Clean up any incomplete or dangling tool calls / empty assistant turns from the chat
+        Chat currentChat = ChatManager.getInstance().getCurrentChat();
+        if (currentChat != null) {
+            List<Message> msgs = currentChat.getMessages();
+            while (!msgs.isEmpty()) {
+                Message lastMsg = msgs.get(msgs.size() - 1);
+                if (lastMsg.getRoleEnum() == Role.TOOL) {
+                    msgs.remove(msgs.size() - 1);
+                } else if (lastMsg.getRoleEnum() == Role.ASSISTANT) {
+                    boolean hasDisplay = lastMsg.getDisplayRaw() != null && lastMsg.getDisplayRaw().trim().length() > 0;
+                    boolean hasThink = lastMsg.getThinkingRaw() != null && lastMsg.getThinkingRaw().trim().length() > 0;
+                    boolean hasToolCalls = lastMsg.getToolCalls() != null && lastMsg.getToolCalls().size() > 0;
+                    if (!hasDisplay && !hasThink) {
+                        msgs.remove(msgs.size() - 1);
+                    } else if (hasToolCalls) {
+                        lastMsg.setToolCalls(null);
+                        if (!hasDisplay && !hasThink) {
+                            msgs.remove(msgs.size() - 1);
+                        }
+                    }
+                    break;
+                } else {
+                    break;
+                }
             }
+            ChatManager.getInstance().saveChat(this, currentChat);
+            ChatManager.getInstance().saveChats(this);
         }
-        resetUIState();
-        ChatManager.getInstance().onMessageAdded(this);
 
-        runOnUiThread(new Runnable() {
-            public void run() {
-                adapter.notifyDataSetChanged();
-                updateEmptyState();
-            }
-        });
+        MainActivity act = currentActivityInstance;
+        if (act != null) {
+            act.resetUIState();
+        } else {
+            resetUIState();
+        }
     }
 
     private void sendMessage() {
@@ -508,7 +590,6 @@ public class MainActivity extends Activity {
         }
         hideKeyboard();
         autoScroll = true;
-        currentStream = null;
         MessageManager.getInstance().addMessage(new Message(Role.USER, text, new ArrayList<String>(inputImages), null));
         ChatManager.getInstance().onMessageAdded(this);
         input.setText("");
@@ -529,29 +610,32 @@ public class MainActivity extends Activity {
             thinkBuffer.setLength(0);
             contentBuffer.setLength(0);
         }
+        currentAssistantMsg = null;
         isThinkingState = false;
         isGenerating = true;
-        isCancelled = false;
-        final int genId = ++currentGenerationId;
+        globalCancelled = false;
+        final int genId = ++globalGenerationId;
         final boolean thinkingEnabled = thinkingToggle.isChecked();
+        isThinkingEnabled = thinkingEnabled;
 
         apiService.chatCompletion(MessageManager.getInstance().getMessages(), thinkingEnabled, new ApiCallback<ApiResult>() {
             @Override
             public void onSuccess(final ApiResult apiResult) {
-                if (genId != currentGenerationId || isCancelled) return;
-                runOnUiThread(new Runnable() {
-                    public void run() {
-                        if (genId != currentGenerationId || isCancelled) return;
-                        startResponseStream(genId, apiResult.getResult(), apiResult.getModel(), thinkingEnabled);
+                if (genId != globalGenerationId || globalCancelled) {
+                    if (apiResult != null && apiResult.getResult() != null) {
+                        try { apiResult.getResult().close(); } catch (IOException ignored) {}
                     }
-                });
+                    return;
+                }
+                startResponseStream(genId, apiResult.getResult(), apiResult.getModel(), thinkingEnabled);
             }
+
             @Override
             public void onError(final ApiError error) {
-                if (genId != currentGenerationId || isCancelled) return;
-                runOnUiThread(new Runnable() {
+                if (genId != globalGenerationId || globalCancelled) return;
+                runOnCurrentActivity(new Runnable() {
                     public void run() {
-                        if (genId != currentGenerationId || isCancelled) return;
+                        if (genId != globalGenerationId || globalCancelled) return;
                         handleStreamError(error.getMessage());
                     }
                 });
@@ -560,27 +644,43 @@ public class MainActivity extends Activity {
     }
 
     private void startResponseStream(final int genId, final InputStream stream, String model, final boolean thinkingEnabled) {
-        if (genId != currentGenerationId || isCancelled) {
+        if (genId != globalGenerationId || globalCancelled) {
             if (stream != null) {
                 try { stream.close(); } catch (IOException ignored) {}
             }
             return;
         }
-        this.currentStream = stream;
-        progressBar.setVisibility(View.GONE);
+        globalCurrentStream = stream;
         final Message msg = new Message(Role.ASSISTANT, "", model);
+        currentAssistantMsg = msg;
         MessageManager.getInstance().addMessage(msg);
-        ChatManager.getInstance().onMessageAdded(this);
-        adapter.notifyDataSetChanged();
-        updateEmptyState();
+
+        MainActivity act = currentActivityInstance;
+        ChatManager.getInstance().onMessageAdded(act != null ? act : this);
+
+        runOnCurrentActivity(new Runnable() {
+            public void run() {
+                MainActivity a = currentActivityInstance;
+                if (a != null) {
+                    if (a.progressBar != null) a.progressBar.setVisibility(View.GONE);
+                    if (a.adapter != null) a.adapter.notifyDataSetChanged();
+                    a.updateEmptyState();
+                }
+            }
+        });
+
         new Thread(new Runnable() {
             public void run() {
                 try {
                     readStream(genId, stream, msg, thinkingEnabled);
                 } catch (Exception e) {
-                    if (genId == currentGenerationId && isGenerating && !isCancelled) {
+                    if (genId == globalGenerationId && isGenerating && !globalCancelled) {
                         final String err = e.getMessage();
-                        runOnUiThread(new Runnable() { public void run() { handleStreamError(err); } });
+                        runOnCurrentActivity(new Runnable() {
+                            public void run() {
+                                handleStreamError(err);
+                            }
+                        });
                     }
                 }
             }
@@ -588,7 +688,25 @@ public class MainActivity extends Activity {
     }
 
     private void handleStreamError(String errorMsg) {
-        progressBar.setVisibility(View.GONE);
+        isGenerating = false;
+        currentAssistantMsg = null;
+        if (progressBar != null) progressBar.setVisibility(View.GONE);
+
+        Chat currentChat = ChatManager.getInstance().getCurrentChat();
+        if (currentChat != null) {
+            List<Message> msgs = currentChat.getMessages();
+            if (!msgs.isEmpty()) {
+                Message last = msgs.get(msgs.size() - 1);
+                if (last.getRoleEnum() == Role.ASSISTANT &&
+                        (last.getContent() == null || last.getContent().trim().length() == 0) &&
+                        (last.getToolCalls() == null || last.getToolCalls().size() == 0)) {
+                    msgs.remove(msgs.size() - 1);
+                } else if (last.getRoleEnum() == Role.ASSISTANT && last.getToolCalls() != null) {
+                    last.setToolCalls(null);
+                }
+            }
+        }
+
         Message error = new Message(Role.ASSISTANT, errorMsg, getString(R.string.error));
         error.setAsError();
         MessageManager.getInstance().addMessage(error);
@@ -598,14 +716,15 @@ public class MainActivity extends Activity {
 
     private void resetUIState() {
         isGenerating = false;
-        adapter.notifyDataSetChanged();
+        currentAssistantMsg = null;
+        if (adapter != null) adapter.notifyDataSetChanged();
         updateEmptyState();
         autoScroll = true;
         scrollToBottom();
-        sendBtn.setImageResource(android.R.drawable.ic_menu_send);
-        input.setEnabled(true);
-        attachBtn.setEnabled(true);
-        progressBar.setVisibility(View.GONE);
+        if (sendBtn != null) sendBtn.setImageResource(android.R.drawable.ic_menu_send);
+        if (input != null) input.setEnabled(true);
+        if (attachBtn != null) attachBtn.setEnabled(true);
+        if (progressBar != null) progressBar.setVisibility(View.GONE);
     }
 
     private void readStream(final int genId, InputStream inputStream, final Message msg, final boolean thinkingEnabled) throws IOException {
@@ -614,7 +733,7 @@ public class MainActivity extends Activity {
         long lastUpdateTime = 0;
         List<StreamToolCall> streamToolCalls = new ArrayList<StreamToolCall>();
 
-        while (genId == currentGenerationId && !isCancelled && (line = reader.readLine()) != null) {
+        while (genId == globalGenerationId && !globalCancelled && (line = reader.readLine()) != null) {
             if (!line.startsWith("data:")) continue;
             String jsonData = line.substring(5).trim();
             if ("[DONE]".equals(jsonData)) break;
@@ -703,31 +822,46 @@ public class MainActivity extends Activity {
 
                 if (hasUpdates && (currentTime - lastUpdateTime >= targetDelay)) {
                     lastUpdateTime = currentTime;
-                    updateStreamUI(msg, thinkingEnabled, false);
+                    runOnCurrentActivity(new Runnable() {
+                        public void run() {
+                            if (genId != globalGenerationId || globalCancelled) return;
+                            MainActivity act = currentActivityInstance;
+                            if (act != null) {
+                                act.updateStreamUI(msg, thinkingEnabled, false);
+                            }
+                        }
+                    });
                 }
             } catch (Exception e) {
                 Log.e("readStream", "error parsing chunk " + jsonData, e);
             }
         }
-        if (genId != currentGenerationId || isCancelled) return;
+        if (genId != globalGenerationId || globalCancelled) return;
 
         final List<StreamToolCall> finalToolCalls = streamToolCalls;
-        runOnUiThread(new Runnable() {
+        runOnCurrentActivity(new Runnable() {
             public void run() {
-                if (genId != currentGenerationId || isCancelled) return;
-                updateStreamUI(msg, thinkingEnabled, true);
+                if (genId != globalGenerationId || globalCancelled) return;
+                MainActivity act = currentActivityInstance;
+                if (act != null) {
+                    act.updateStreamUI(msg, thinkingEnabled, true);
+                }
                 if (!finalToolCalls.isEmpty()) {
                     executeToolCalls(genId, msg, finalToolCalls);
                 } else {
-                    ChatManager.getInstance().onMessageAdded(MainActivity.this);
-                    resetUIState();
+                    isGenerating = false;
+                    currentAssistantMsg = null;
+                    ChatManager.getInstance().onMessageAdded(act != null ? act : MainActivity.this);
+                    if (act != null) {
+                        act.resetUIState();
+                    }
                 }
             }
         });
     }
 
     private void executeToolCalls(final int genId, final Message assistantMsg, final List<StreamToolCall> toolCalls) {
-        if (genId != currentGenerationId || isCancelled) return;
+        if (genId != globalGenerationId || globalCancelled) return;
 
         JSONArray toolCallsArray = new JSONArray();
         final List<StreamToolCall> executableCalls = new ArrayList<StreamToolCall>();
@@ -752,19 +886,35 @@ public class MainActivity extends Activity {
         assistantMsg.setToolCalls(toolCallsArray);
         assistantMsg.setSearchResultCount(0);
 
+        // Finalize the assistant message turn and detach from active buffer before tool execution
+        currentAssistantMsg = null;
+        synchronized (bufferLock) {
+            thinkBuffer.setLength(0);
+            contentBuffer.setLength(0);
+        }
+
+        MainActivity act = currentActivityInstance;
+        ChatManager.getInstance().onMessageAdded(act != null ? act : this);
+
         if (executableCalls.isEmpty()) {
-            resetUIState();
+            isGenerating = false;
+            currentAssistantMsg = null;
+            if (act != null) act.resetUIState();
             return;
         }
 
         final Chat targetChat = ChatManager.getInstance().getCurrentChat();
 
-        runOnUiThread(new Runnable() {
+        runOnCurrentActivity(new Runnable() {
             @Override
             public void run() {
-                if (genId != currentGenerationId || isCancelled) return;
-                adapter.notifyDataSetChanged();
-                scrollToBottom();
+                if (genId != globalGenerationId || globalCancelled) return;
+                MainActivity a = currentActivityInstance;
+                if (a != null) {
+                    if (a.progressBar != null) a.progressBar.setVisibility(View.VISIBLE);
+                    if (a.adapter != null) a.adapter.notifyDataSetChanged();
+                    a.scrollToBottom();
+                }
             }
         });
 
@@ -775,7 +925,7 @@ public class MainActivity extends Activity {
                 WebFetcher webFetcher = new WebFetcher();
 
                 for (int i = 0; i < executableCalls.size(); i++) {
-                    if (genId != currentGenerationId || isCancelled || ChatManager.getInstance().getCurrentChat() != targetChat) {
+                    if (genId != globalGenerationId || globalCancelled || ChatManager.getInstance().getCurrentChat() != targetChat) {
                         return;
                     }
                     StreamToolCall stc = executableCalls.get(i);
@@ -783,7 +933,9 @@ public class MainActivity extends Activity {
                     String resultText;
 
                     if ("web_search".equals(stc.name)) {
-                        SearchEngine engine = SearchManager.getInstance().getEngine(MainActivity.this);
+                        MainActivity curAct = currentActivityInstance;
+                        Context searchCtx = curAct != null ? curAct : MainActivity.this;
+                        SearchEngine engine = SearchManager.getInstance().getEngine(searchCtx);
                         try {
                             JSONObject args = JSON.getObject(stc.arguments.toString());
                             String q = args.getString("query");
@@ -827,7 +979,7 @@ public class MainActivity extends Activity {
                         resultText = "{\"status\": \"error\", \"message\": \"Unsupported tool call\"}";
                     }
                     Log.i("Tool", resultText);
-                    if (genId != currentGenerationId || isCancelled || ChatManager.getInstance().getCurrentChat() != targetChat) {
+                    if (genId != globalGenerationId || globalCancelled || ChatManager.getInstance().getCurrentChat() != targetChat) {
                         return;
                     }
                     Message toolMessage = new Message(Role.TOOL, resultText);
@@ -835,16 +987,25 @@ public class MainActivity extends Activity {
                     targetChat.getMessages().add(toolMessage);
                 }
 
-                assistantMsg.setSearchResultCount(totalResults);
+                if (genId != globalGenerationId || globalCancelled || ChatManager.getInstance().getCurrentChat() != targetChat) {
+                    return;
+                }
 
-                runOnUiThread(new Runnable() {
+                assistantMsg.setSearchResultCount(totalResults);
+                MainActivity curAct = currentActivityInstance;
+                ChatManager.getInstance().onMessageAdded(curAct != null ? curAct : MainActivity.this);
+
+                runOnCurrentActivity(new Runnable() {
                     @Override
                     public void run() {
-                        if (genId != currentGenerationId || isCancelled || ChatManager.getInstance().getCurrentChat() != targetChat) {
+                        if (genId != globalGenerationId || globalCancelled || ChatManager.getInstance().getCurrentChat() != targetChat) {
                             return;
                         }
-                        adapter.notifyDataSetChanged();
-                        requestAICompletion();
+                        MainActivity a = currentActivityInstance;
+                        if (a != null) {
+                            if (a.adapter != null) a.adapter.notifyDataSetChanged();
+                            a.requestAICompletion();
+                        }
                     }
                 });
             }
@@ -879,6 +1040,7 @@ public class MainActivity extends Activity {
     }
 
     private void updateStreamUI(final Message msg, final boolean thinkingEnabled, final boolean isFinal) {
+        if (msg == null) return;
         if (Looper.myLooper() != Looper.getMainLooper()) {
             runOnUiThread(new Runnable() {
                 public void run() {
@@ -895,52 +1057,63 @@ public class MainActivity extends Activity {
             displayThink = thinkBuffer.toString();
         }
 
-        if (thinkingEnabled && displayThink.length() > 0) {
-            msg.setContent("<think>" + displayThink + "</think>" + displayContent);
-        } else {
-            msg.setContent(displayContent);
+        if (displayThink.length() > 0 || displayContent.length() > 0) {
+            if (thinkingEnabled && displayThink.length() > 0) {
+                msg.setContent("<think>" + displayThink + "</think>" + displayContent);
+            } else {
+                msg.setContent(displayContent);
+            }
         }
 
         int firstVis = msgList.getFirstVisiblePosition();
         int lastVis = msgList.getLastVisiblePosition();
-        int count = adapter.getCount();
+        int count = adapter != null ? adapter.getCount() : 0;
         int targetIndex = count - 1;
-        if (targetIndex >= firstVis && targetIndex <= lastVis) {
-            View view = msgList.getChildAt(targetIndex - firstVis);
-            if (view != null) {
-                TextView tvText = (TextView) view.findViewById(R.id.message_text);
-                LinearLayout thinkLayout = (LinearLayout) view.findViewById(R.id.thinkingLayout);
-                TextView tvThink = (TextView) view.findViewById(R.id.thinkingProcess);
-                View vResponse = view.findViewById(R.id.response);
+        boolean viewUpdated = false;
 
-                if (tvText != null) {
-                    tvText.setMovementMethod(LinkMovementMethod.getInstance());
-                    tvText.setText(msg.getParsedDisplayContent(MainActivity.this, !isFinal));
-                }
+        if (targetIndex >= firstVis && targetIndex <= lastVis && targetIndex >= 0) {
+            if (adapter != null && targetIndex < adapter.getCount() && adapter.getItem(targetIndex) == msg) {
+                View view = msgList.getChildAt(targetIndex - firstVis);
+                if (view != null) {
+                    TextView tvText = (TextView) view.findViewById(R.id.message_text);
+                    LinearLayout thinkLayout = (LinearLayout) view.findViewById(R.id.thinkingLayout);
+                    TextView tvThink = (TextView) view.findViewById(R.id.thinkingProcess);
+                    View vResponse = view.findViewById(R.id.response);
 
-                if (thinkingEnabled) {
-                    boolean hasThinkContent = displayThink.length() > 0;
-                    if (hasThinkContent) {
-                        thinkLayout.setVisibility(View.VISIBLE);
-                        View noThink = view.findViewById(R.id.noThinking);
-                        if (noThink != null) noThink.setVisibility(View.GONE);
-                        if (tvThink != null) {
-                            tvThink.setMovementMethod(LinkMovementMethod.getInstance());
-                            tvThink.setText(msg.getParsedThinkContent(MainActivity.this, !isFinal));
+                    if (tvText != null) {
+                        tvText.setMovementMethod(LinkMovementMethod.getInstance());
+                        tvText.setText(msg.getParsedDisplayContent(MainActivity.this, !isFinal));
+                    }
+
+                    if (thinkingEnabled) {
+                        boolean hasThinkContent = displayThink.length() > 0;
+                        if (hasThinkContent) {
+                            if (thinkLayout != null) thinkLayout.setVisibility(View.VISIBLE);
+                            View noThink = view.findViewById(R.id.noThinking);
+                            if (noThink != null) noThink.setVisibility(View.GONE);
+                            if (tvThink != null) {
+                                tvThink.setMovementMethod(LinkMovementMethod.getInstance());
+                                tvThink.setText(msg.getParsedThinkContent(MainActivity.this, !isFinal));
+                            }
+                        } else {
+                            if (thinkLayout != null) thinkLayout.setVisibility(View.VISIBLE);
+                            View noThink = view.findViewById(R.id.noThinking);
+                            if (noThink != null) noThink.setVisibility(View.VISIBLE);
                         }
                     } else {
-                        thinkLayout.setVisibility(View.VISIBLE);
-                        View noThink = view.findViewById(R.id.noThinking);
-                        if (noThink != null) noThink.setVisibility(View.VISIBLE);
+                        if (thinkLayout != null) thinkLayout.setVisibility(View.GONE);
                     }
-                } else {
-                    if (thinkLayout != null) thinkLayout.setVisibility(View.GONE);
-                }
 
-                if (vResponse != null) {
-                    vResponse.setVisibility((displayContent.length() > 0) ? View.VISIBLE : View.GONE);
+                    if (vResponse != null) {
+                        vResponse.setVisibility((displayContent.length() > 0) ? View.VISIBLE : View.GONE);
+                    }
+                    viewUpdated = true;
                 }
             }
+        }
+
+        if (!viewUpdated && adapter != null) {
+            adapter.notifyDataSetChanged();
         }
 
         if (autoScroll) scrollToBottom();
