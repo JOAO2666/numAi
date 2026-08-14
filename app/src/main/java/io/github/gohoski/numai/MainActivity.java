@@ -94,6 +94,7 @@ public class MainActivity extends Activity {
     private final StringBuilder thinkBuffer = new StringBuilder();
     private final StringBuilder contentBuffer = new StringBuilder();
     private final List<String> inputImages = new ArrayList<String>();
+    private long nextImageId = System.currentTimeMillis();
 
     private static class StreamToolCall {
         String id = "";
@@ -145,6 +146,9 @@ public class MainActivity extends Activity {
             public void onClick(View view) {
                 Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                 intent.setType("image/*");
+                // Use the raw extra name so the app can keep its API 1 compatibility.
+                // Android 4.3+ file pickers return multiple selections through ClipData.
+                intent.putExtra("android.intent.extra.ALLOW_MULTIPLE", true);
                 startActivityForResult(Intent.createChooser(intent, getString(R.string.select_picture)), REQUEST_CODE_PICK_IMAGE);
             }
         });
@@ -420,12 +424,39 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == REQUEST_CODE_PICK_IMAGE && resultCode == RESULT_OK && data != null) {
-            processSelectedImage(data.getData());
+            boolean processedMultiple = processSelectedImages(data);
+            if (!processedMultiple && data.getData() != null) {
+                processSelectedImage(data.getData());
+            }
+        }
+    }
+
+    private boolean processSelectedImages(Intent data) {
+        try {
+            Method getClipData = data.getClass().getMethod("getClipData", new Class[0]);
+            Object clipData = getClipData.invoke(data, new Object[0]);
+            if (clipData == null) return false;
+
+            Method getItemCount = clipData.getClass().getMethod("getItemCount", new Class[0]);
+            Method getItemAt = clipData.getClass().getMethod("getItemAt", new Class[]{Integer.TYPE});
+            int itemCount = ((Integer) getItemCount.invoke(clipData, new Object[0])).intValue();
+
+            for (int i = 0; i < itemCount; i++) {
+                Object item = getItemAt.invoke(clipData, new Object[]{Integer.valueOf(i)});
+                Method getUri = item.getClass().getMethod("getUri", new Class[0]);
+                Uri uri = (Uri) getUri.invoke(item, new Object[0]);
+                if (uri != null) processSelectedImage(uri);
+            }
+            return itemCount > 0;
+        } catch (Exception ignored) {
+            // ClipData does not exist on old Android versions. The single-image
+            // data URI fallback in onActivityResult keeps the old behavior working.
+            return false;
         }
     }
 
     private void processSelectedImage(Uri uri) {
-        String fileName = "img_" + System.currentTimeMillis() + ".jpg";
+        String fileName = "img_" + nextImageId++ + ".jpg";
         FileOutputStream fos = null;
         boolean success = false;
         try {
