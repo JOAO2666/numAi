@@ -148,19 +148,32 @@ public class Message {
         }
 
         String text = content;
-        int thinkStart = text.indexOf("<think>");
-        if (thinkStart != -1) {
-            int thinkEnd = text.indexOf("</think>", thinkStart);
-            if (thinkEnd != -1) {
-                cachedThinkingRaw = text.substring(thinkStart + 7, thinkEnd).trim();
-                text = text.substring(0, thinkStart) + text.substring(thinkEnd + 8);
+        StringBuilder thinkSb = new StringBuilder();
+        StringBuilder displaySb = new StringBuilder();
+        int cursor = 0;
+
+        while (cursor < text.length()) {
+            int thinkStart = text.indexOf("<think>", cursor);
+            if (thinkStart == -1) {
+                displaySb.append(text.substring(cursor));
+                break;
+            }
+            displaySb.append(text.substring(cursor, thinkStart));
+            int thinkEnd = text.indexOf("</think>", thinkStart + 7);
+            if (thinkEnd == -1) {
+                if (thinkSb.length() > 0) thinkSb.append("\n\n");
+                thinkSb.append(text.substring(thinkStart + 7));
+                cursor = text.length();
+                break;
             } else {
-                cachedThinkingRaw = text.substring(thinkStart + 7).trim();
-                text = text.substring(0, thinkStart);
+                if (thinkSb.length() > 0) thinkSb.append("\n\n");
+                thinkSb.append(text.substring(thinkStart + 7, thinkEnd));
+                cursor = thinkEnd + 8;
             }
         }
 
-        cachedDisplayRaw = stripThoughtChannelPrefix(text);
+        cachedThinkingRaw = thinkSb.toString().trim();
+        cachedDisplayRaw = stripThoughtChannelPrefix(displaySb.toString());
     }
 
     private static String stripThoughtChannelPrefix(String text) {

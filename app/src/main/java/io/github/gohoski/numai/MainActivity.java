@@ -70,6 +70,9 @@ import io.github.gohoski.numai.util.SSLDisabler;
 public class MainActivity extends Activity {
     private static final int REQUEST_CODE_PICK_IMAGE = 1;
 
+    private static final String TAG_THINK_START = "<think>";
+    private static final String TAG_THINK_END = "</think>";
+
     // Static process-wide generation state across activity lifecycles
     private static volatile MainActivity currentActivityInstance = null;
     private static volatile int globalGenerationId = 0;
@@ -83,6 +86,7 @@ public class MainActivity extends Activity {
     private static final Object bufferLock = new Object();
     private static final StringBuilder thinkBuffer = new StringBuilder();
     private static final StringBuilder contentBuffer = new StringBuilder();
+    private static final StringBuilder matchingTagBuffer = new StringBuilder();
 
     private ApiService apiService;
     private ConfigManager config;
@@ -112,6 +116,18 @@ public class MainActivity extends Activity {
         if (act != null) {
             act.runOnUiThread(r);
         }
+    }
+
+    public static boolean isMessageCurrentlyThinking(Message msg) {
+        if (!isGenerating || msg == null || msg != currentAssistantMsg) {
+            return false;
+        }
+        if (!isThinkingEnabled) {
+            return false;
+        }
+        String thinkRaw = msg.getThinkingRaw();
+        String dispRaw = msg.getDisplayRaw();
+        return (thinkRaw == null || thinkRaw.length() == 0) && (dispRaw == null || dispRaw.length() == 0);
     }
 
     @Override
@@ -209,7 +225,6 @@ public class MainActivity extends Activity {
             }
         });
 
-        // Restore generating state across rotation
         if (isGenerating) {
             sendBtn.setImageResource(R.drawable.ic_action_stop);
             input.setEnabled(false);
@@ -244,8 +259,6 @@ public class MainActivity extends Activity {
         if (currentActivityInstance == this) {
             currentActivityInstance = null;
         }
-        // Only terminate generation if the user is truly leaving the activity (e.g. Back pressed),
-        // not when rotating (configuration change where isFinishing() is false)
         if (isFinishing()) {
             stopGeneration();
         }
@@ -268,7 +281,6 @@ public class MainActivity extends Activity {
             }
         }
 
-        // Clean up any trailing orphaned tool messages
         while (!msgs.isEmpty() && msgs.get(msgs.size() - 1).getRoleEnum() == Role.TOOL) {
             msgs.remove(msgs.size() - 1);
         }
@@ -537,6 +549,7 @@ public class MainActivity extends Activity {
         synchronized (bufferLock) {
             thinkBuffer.setLength(0);
             contentBuffer.setLength(0);
+            matchingTagBuffer.setLength(0);
         }
         if (globalCurrentStream != null) {
             try {
@@ -545,7 +558,6 @@ public class MainActivity extends Activity {
             globalCurrentStream = null;
         }
 
-        // Clean up any incomplete or dangling tool calls / empty assistant turns from the chat
         Chat currentChat = ChatManager.getInstance().getCurrentChat();
         if (currentChat != null) {
             List<Message> msgs = currentChat.getMessages();
@@ -609,6 +621,7 @@ public class MainActivity extends Activity {
         synchronized (bufferLock) {
             thinkBuffer.setLength(0);
             contentBuffer.setLength(0);
+            matchingTagBuffer.setLength(0);
         }
         currentAssistantMsg = null;
         isThinkingState = false;
@@ -665,6 +678,7 @@ public class MainActivity extends Activity {
                     if (a.progressBar != null) a.progressBar.setVisibility(View.GONE);
                     if (a.adapter != null) a.adapter.notifyDataSetChanged();
                     a.updateEmptyState();
+                    a.scrollToBottom();
                 }
             }
         });
@@ -757,13 +771,43 @@ public class MainActivity extends Activity {
                             JSONObject tcObj = tcArr.getObject(i);
                             if (tcObj == null) continue;
 
+                            String tcId = (tcObj.has("id") && !tcObj.isNull("id")) ? tcObj.getString("id") : null;
                             int index = tcObj.getInt("index", 0);
-                            while (streamToolCalls.size() <= index) {
-                                streamToolCalls.add(new StreamToolCall());
+                            StreamToolCall stc = null;
+
+                            if (tcId != null && tcId.length() > 0) {
+                                for (int k = 0; k < streamToolCalls.size(); k++) {
+                                    if (tcId.equals(streamToolCalls.get(k).id)) {
+                                        stc = streamToolCalls.get(k);
+                                        break;
+                                    }
+                                }
                             }
-                            StreamToolCall stc = streamToolCalls.get(index);
-                            if (tcObj.has("id") && !tcObj.isNull("id")) {
-                                stc.id = tcObj.getString("id");
+
+                            if (stc == null && index < streamToolCalls.size()) {
+                                StreamToolCall existing = streamToolCalls.get(index);
+                                if (existing.id == null || existing.id.length() == 0 || (tcId != null && existing.id.equals(tcId))) {
+                                    stc = existing;
+                                }
+                            }
+
+                            if (stc == null) {
+                                stc = new StreamToolCall();
+                                if (tcId != null) {
+                                    stc.id = tcId;
+                                }
+                                while (streamToolCalls.size() < index) {
+                                    streamToolCalls.add(new StreamToolCall());
+                                }
+                                if (index < streamToolCalls.size() && (streamToolCalls.get(index).id == null || streamToolCalls.get(index).id.length() == 0)) {
+                                    streamToolCalls.set(index, stc);
+                                } else {
+                                    streamToolCalls.add(stc);
+                                }
+                            }
+
+                            if (tcId != null && tcId.length() > 0) {
+                                stc.id = tcId;
                             }
                             if (tcObj.has("function") && !tcObj.isNull("function")) {
                                 JSONObject fnObj = tcObj.getObject("function");
@@ -797,12 +841,12 @@ public class MainActivity extends Activity {
                             hasUpdates = true;
                         }
                         if (contentStr != null && contentStr.length() > 0) {
-                            processContentWithTags(contentStr);
+                            processStreamingContentChunk(contentStr);
                             hasUpdates = true;
                         }
                     } else {
                         if (contentStr != null && contentStr.length() > 0) {
-                            processContentWithTags(contentStr);
+                            processStreamingContentChunk(contentStr);
                             hasUpdates = true;
                         }
                     }
@@ -837,6 +881,18 @@ public class MainActivity extends Activity {
             }
         }
         if (genId != globalGenerationId || globalCancelled) return;
+
+        // Flush any remaining partial tag at EOF
+        synchronized (bufferLock) {
+            if (matchingTagBuffer.length() > 0) {
+                if (isThinkingState) {
+                    thinkBuffer.append(matchingTagBuffer.toString());
+                } else {
+                    contentBuffer.append(matchingTagBuffer.toString());
+                }
+                matchingTagBuffer.setLength(0);
+            }
+        }
 
         final List<StreamToolCall> finalToolCalls = streamToolCalls;
         runOnCurrentActivity(new Runnable() {
@@ -886,11 +942,12 @@ public class MainActivity extends Activity {
         assistantMsg.setToolCalls(toolCallsArray);
         assistantMsg.setSearchResultCount(0);
 
-        // Finalize the assistant message turn and detach from active buffer before tool execution
+        // Detach assistant msg turn from live streaming buffer before executing tool
         currentAssistantMsg = null;
         synchronized (bufferLock) {
             thinkBuffer.setLength(0);
             contentBuffer.setLength(0);
+            matchingTagBuffer.setLength(0);
         }
 
         MainActivity act = currentActivityInstance;
@@ -1012,28 +1069,51 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    private void processContentWithTags(String token) {
-        int cursor = 0;
-        while (cursor < token.length()) {
+    private void processStreamingContentChunk(String token) {
+        if (token == null || token.length() == 0) return;
+        for (int i = 0; i < token.length(); i++) {
+            char c = token.charAt(i);
             if (isThinkingState) {
-                int endTag = token.indexOf("</think>", cursor);
-                if (endTag != -1) {
-                    thinkBuffer.append(token.substring(cursor, endTag));
-                    isThinkingState = false;
-                    cursor = endTag + 8;
+                int matchLen = matchingTagBuffer.length();
+                if (c == TAG_THINK_END.charAt(matchLen)) {
+                    matchingTagBuffer.append(c);
+                    if (matchingTagBuffer.length() == TAG_THINK_END.length()) {
+                        isThinkingState = false;
+                        matchingTagBuffer.setLength(0);
+                    }
                 } else {
-                    thinkBuffer.append(token.substring(cursor));
-                    break;
+                    if (matchingTagBuffer.length() > 0) {
+                        thinkBuffer.append(matchingTagBuffer.toString());
+                        matchingTagBuffer.setLength(0);
+                        if (c == TAG_THINK_END.charAt(0)) {
+                            matchingTagBuffer.append(c);
+                        } else {
+                            thinkBuffer.append(c);
+                        }
+                    } else {
+                        thinkBuffer.append(c);
+                    }
                 }
             } else {
-                int startTag = token.indexOf("<think>", cursor);
-                if (startTag != -1) {
-                    contentBuffer.append(token.substring(cursor, startTag));
-                    isThinkingState = true;
-                    cursor = startTag + 7;
+                int matchLen = matchingTagBuffer.length();
+                if (c == TAG_THINK_START.charAt(matchLen)) {
+                    matchingTagBuffer.append(c);
+                    if (matchingTagBuffer.length() == TAG_THINK_START.length()) {
+                        isThinkingState = true;
+                        matchingTagBuffer.setLength(0);
+                    }
                 } else {
-                    contentBuffer.append(token.substring(cursor));
-                    break;
+                    if (matchingTagBuffer.length() > 0) {
+                        contentBuffer.append(matchingTagBuffer.toString());
+                        matchingTagBuffer.setLength(0);
+                        if (c == TAG_THINK_START.charAt(0)) {
+                            matchingTagBuffer.append(c);
+                        } else {
+                            contentBuffer.append(c);
+                        }
+                    } else {
+                        contentBuffer.append(c);
+                    }
                 }
             }
         }
@@ -1058,11 +1138,13 @@ public class MainActivity extends Activity {
         }
 
         if (displayThink.length() > 0 || displayContent.length() > 0) {
-            if (thinkingEnabled && displayThink.length() > 0) {
+            if (displayThink.length() > 0) {
                 msg.setContent("<think>" + displayThink + "</think>" + displayContent);
             } else {
                 msg.setContent(displayContent);
             }
+        } else {
+            msg.setContent("");
         }
 
         int firstVis = msgList.getFirstVisiblePosition();
@@ -1077,6 +1159,7 @@ public class MainActivity extends Activity {
                 if (view != null) {
                     TextView tvText = (TextView) view.findViewById(R.id.message_text);
                     LinearLayout thinkLayout = (LinearLayout) view.findViewById(R.id.thinkingLayout);
+                    ProgressBar noThink = (ProgressBar) view.findViewById(R.id.noThinking);
                     TextView tvThink = (TextView) view.findViewById(R.id.thinkingProcess);
                     View vResponse = view.findViewById(R.id.response);
 
@@ -1085,23 +1168,21 @@ public class MainActivity extends Activity {
                         tvText.setText(msg.getParsedDisplayContent(MainActivity.this, !isFinal));
                     }
 
-                    if (thinkingEnabled) {
-                        boolean hasThinkContent = displayThink.length() > 0;
-                        if (hasThinkContent) {
-                            if (thinkLayout != null) thinkLayout.setVisibility(View.VISIBLE);
-                            View noThink = view.findViewById(R.id.noThinking);
-                            if (noThink != null) noThink.setVisibility(View.GONE);
-                            if (tvThink != null) {
-                                tvThink.setMovementMethod(LinkMovementMethod.getInstance());
-                                tvThink.setText(msg.getParsedThinkContent(MainActivity.this, !isFinal));
-                            }
-                        } else {
-                            if (thinkLayout != null) thinkLayout.setVisibility(View.VISIBLE);
-                            View noThink = view.findViewById(R.id.noThinking);
-                            if (noThink != null) noThink.setVisibility(View.VISIBLE);
+                    if (displayThink.length() > 0) {
+                        if (thinkLayout != null) thinkLayout.setVisibility(View.VISIBLE);
+                        if (noThink != null) noThink.setVisibility(View.GONE);
+                        if (tvThink != null) {
+                            tvThink.setVisibility(View.VISIBLE);
+                            tvThink.setMovementMethod(LinkMovementMethod.getInstance());
+                            tvThink.setText(msg.getParsedThinkContent(MainActivity.this, !isFinal));
                         }
+                    } else if (!isFinal && isGenerating && thinkingEnabled && displayContent.length() == 0) {
+                        if (thinkLayout != null) thinkLayout.setVisibility(View.VISIBLE);
+                        if (noThink != null) noThink.setVisibility(View.VISIBLE);
+                        if (tvThink != null) tvThink.setVisibility(View.GONE);
                     } else {
                         if (thinkLayout != null) thinkLayout.setVisibility(View.GONE);
+                        if (noThink != null) noThink.setVisibility(View.GONE);
                     }
 
                     if (vResponse != null) {
@@ -1173,20 +1254,20 @@ public class MainActivity extends Activity {
     private String extractJSONReasoning(JSONObject delta) {
         if (delta == null) return null;
         try {
-            return delta.getString("reasoning");
+            if (delta.has("reasoning_content") && !delta.isNull("reasoning_content")) {
+                return delta.getString("reasoning_content");
+            }
         } catch (Exception ignored) {}
 
         try {
-            return delta.getString("reasoning_content");
+            if (delta.has("reasoning") && !delta.isNull("reasoning")) {
+                return delta.getString("reasoning");
+            }
         } catch (Exception ignored) {}
 
         try {
-            JSONArray arr = delta.getArray("reasoning_content");
-            if (arr != null && arr.size() > 0) {
-                JSONObject obj = arr.getObject(0);
-                if (obj != null && !obj.isNull("thinking")) {
-                    return obj.getString("thinking");
-                }
+            if (delta.has("thought") && !delta.isNull("thought")) {
+                return delta.getString("thought");
             }
         } catch (Exception ignored) {}
 

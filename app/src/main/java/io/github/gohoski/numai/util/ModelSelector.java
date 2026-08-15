@@ -8,7 +8,12 @@ public class ModelSelector {
             "deepseek-v3.2", "gemma4:", "deepseek-v4-flash-free", "deepseek-v4-flash-0731", "deepseek-v4-flash", "qwen3.8", "qwen3.7", "qwen3.6", "qwen3.5", "gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-3.5-flash", "gpt-5.6-luna", "gpt-5.6"
     );
     private static final List<String> THINKING_MODELS = Arrays.asList(
-            "gemma4:", "deepseek-v4-flash-free", "deepseek-v4-flash-0731", "deepseek-v4-flash", "qwen3.8", "qwen3.7", "qwen3.6", "qwen3.5", "gemini-3.6-flash", "gemini-3.5-flash", "gpt-5.6-luna", "gpt-5.6", "ling-3.0-flash", "step-3.7-flash"
+            // Ollama Cloud
+            "minimax-m3", "gemma4:",
+            // OpenCode Zen
+            "deepseek-v4-flash-free",
+            // Everything else (VoidAI, etc.)
+            "deepseek-v4-flash-0731", "deepseek-v4-flash", "qwen3.8", "qwen3.7", "qwen3.6", "qwen3.5", "gemini-3.6-flash", "gemini-3.5-flash", "gpt-5.6-luna", "gpt-5.6", "ling-3.0-flash", "step-3.7-flash"
     );
 
     public static String selectChatModel(List<String> availableModels) {

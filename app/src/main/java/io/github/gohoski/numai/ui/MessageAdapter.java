@@ -8,6 +8,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import cc.nnproject.json.JSON;
 import cc.nnproject.json.JSONArray;
 import cc.nnproject.json.JSONException;
 import cc.nnproject.json.JSONObject;
+import io.github.gohoski.numai.MainActivity;
 import io.github.gohoski.numai.R;
 import io.github.gohoski.numai.model.Message;
 import io.github.gohoski.numai.model.Role;
@@ -112,6 +114,7 @@ public class MessageAdapter extends ArrayAdapter<Message> {
             holder.messageText = (TextView) convertView.findViewById(R.id.message_text);
             holder.llm = (TextView) convertView.findViewById(R.id.llm);
             holder.thinkingLayout = (LinearLayout) convertView.findViewById(R.id.thinkingLayout);
+            holder.noThinking = (ProgressBar) convertView.findViewById(R.id.noThinking);
             holder.thinkingProcess = (TextView) convertView.findViewById(R.id.thinkingProcess);
             holder.searchLayout = (LinearLayout) convertView.findViewById(R.id.searchLayout);
             holder.searchResultsCount = (TextView) convertView.findViewById(R.id.searchResultsCount);
@@ -128,12 +131,29 @@ public class MessageAdapter extends ArrayAdapter<Message> {
         String displayRaw = message.getDisplayRaw();
 
         // Thinking Box
-        if (thinkingRaw != null && thinkingRaw.length() != 0) {
+        if (thinkingRaw != null && thinkingRaw.length() > 0) {
             holder.thinkingLayout.setVisibility(View.VISIBLE);
-            holder.thinkingProcess.setMovementMethod(LinkMovementMethod.getInstance());
-            holder.thinkingProcess.setText(message.getParsedThinkContent(context, false));
+            if (holder.noThinking != null) {
+                holder.noThinking.setVisibility(View.GONE);
+            }
+            if (holder.thinkingProcess != null) {
+                holder.thinkingProcess.setVisibility(View.VISIBLE);
+                holder.thinkingProcess.setMovementMethod(LinkMovementMethod.getInstance());
+                holder.thinkingProcess.setText(message.getParsedThinkContent(context, false));
+            }
+        } else if (MainActivity.isMessageCurrentlyThinking(message)) {
+            holder.thinkingLayout.setVisibility(View.VISIBLE);
+            if (holder.noThinking != null) {
+                holder.noThinking.setVisibility(View.VISIBLE);
+            }
+            if (holder.thinkingProcess != null) {
+                holder.thinkingProcess.setVisibility(View.GONE);
+            }
         } else {
             holder.thinkingLayout.setVisibility(View.GONE);
+            if (holder.noThinking != null) {
+                holder.noThinking.setVisibility(View.GONE);
+            }
         }
 
         // Search Box
@@ -217,6 +237,7 @@ public class MessageAdapter extends ArrayAdapter<Message> {
         TextView messageText;
         TextView llm;
         LinearLayout thinkingLayout;
+        ProgressBar noThinking;
         TextView thinkingProcess;
         LinearLayout searchLayout;
         TextView searchResultsCount;
