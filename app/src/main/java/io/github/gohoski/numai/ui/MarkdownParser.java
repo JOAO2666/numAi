@@ -20,8 +20,10 @@ import android.text.style.StyleSpan;
 import android.text.style.TypefaceSpan;
 import android.text.style.URLSpan;
 import android.view.View;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,6 +34,7 @@ public class MarkdownParser {
     private static final int COLOR_CODE_BG = 0x22888888;
     private static final int COLOR_BUTTON_BG = 0xFF2C2C2C;
     private static final int COLOR_BUTTON_TEXT = 0xFF64B5F6;
+    private static final int COLOR_QUOTE_TEXT = 0xFFAAAAAA;
 
     public static CharSequence parse(String text) {
         return parse(null, text, false);
@@ -139,6 +142,8 @@ public class MarkdownParser {
             else if (line.startsWith("## ")) headerLevel = 2;
             else if (line.startsWith("### ")) headerLevel = 3;
             else if (line.startsWith("#### ")) headerLevel = 4;
+            else if (line.startsWith("##### ")) headerLevel = 5;
+            else if (line.startsWith("###### ")) headerLevel = 6;
 
             int sbLineStart = sb.length();
 
@@ -147,14 +152,20 @@ public class MarkdownParser {
                 parseInlineFormatting(sb, headerText);
                 int sbLineEnd = sb.length();
 
-                float scale = 1.4f - (headerLevel * 0.08f);
+                float scale = Math.max(1.05f, 1.4f - (headerLevel * 0.07f));
                 sb.setSpan(new RelativeSizeSpan(scale), sbLineStart, sbLineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 sb.setSpan(new StyleSpan(Typeface.BOLD), sbLineStart, sbLineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            } else if (line.startsWith("- ") || line.startsWith("* ")) {
+            } else if (line.startsWith("- ") || line.startsWith("* ") || line.startsWith("+ ")) {
                 String bulletText = line.substring(2);
                 parseInlineFormatting(sb, bulletText);
                 int sbLineEnd = sb.length();
                 sb.setSpan(new BulletSpan(10), sbLineStart, sbLineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            } else if (line.startsWith("> ")) {
+                String quoteText = line.substring(2);
+                parseInlineFormatting(sb, quoteText);
+                int sbLineEnd = sb.length();
+                sb.setSpan(new StyleSpan(Typeface.ITALIC), sbLineStart, sbLineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                sb.setSpan(new ForegroundColorSpan(COLOR_QUOTE_TEXT), sbLineStart, sbLineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             } else {
                 parseInlineFormatting(sb, line);
             }
@@ -176,13 +187,13 @@ public class MarkdownParser {
     private static boolean isTableLine(String line) {
         if (line == null) return false;
         String trimmed = line.trim();
-        return trimmed.length() > 0 && trimmed.contains("|");
+        return trimmed.length() > 0 && trimmed.indexOf('|') != -1;
     }
 
     private static boolean isTableDelimiterLine(String line) {
         if (line == null) return false;
         String trimmed = line.trim();
-        if (trimmed.length() == 0 || !trimmed.contains("-")) return false;
+        if (trimmed.length() == 0 || trimmed.indexOf('-') == -1) return false;
         for (int j = 0; j < trimmed.length(); j++) {
             char c = trimmed.charAt(j);
             if (c != '|' && c != '-' && c != ':' && c != ' ' && c != '\t') {
@@ -202,7 +213,7 @@ public class MarkdownParser {
         if (trimmed.endsWith("|")) {
             trimmed = trimmed.substring(0, trimmed.length() - 1);
         }
-        String[] parts = trimmed.split("\\|");
+        String[] parts = trimmed.split("\\|", -1);
         for (int k = 0; k < parts.length; k++) {
             cells.add(parts[k].trim());
         }
@@ -316,9 +327,12 @@ public class MarkdownParser {
 
     private static String formatCellMarkdown(String text) {
         if (text == null || text.length() == 0) return "";
-        if (!hasMarkdownSymbols(text)) return escapeHtml(text);
         String s = escapeHtml(text);
+        s = s.replaceAll("\\[(.*?)\\]\\((.*?)\\)", "<a href=\"$2\" style=\"color:#64b5f6;\">$1</a>");
+        s = s.replaceAll("\\*\\*\\*(.*?)\\*\\*\\*", "<b><i>$1</i></b>");
+        s = s.replaceAll("___(.*?)___", "<b><i>$1</i></b>");
         s = s.replaceAll("\\*\\*(.*?)\\*\\*", "<b>$1</b>");
+        s = s.replaceAll("__(.*?)__", "<b>$1</b>");
         s = s.replaceAll("\\*(.*?)\\*", "<i>$1</i>");
         s = s.replaceAll("_(.*?)_", "<i>$1</i>");
         s = s.replaceAll("~~(.*?)~~", "<s>$1</s>");
@@ -389,9 +403,16 @@ public class MarkdownParser {
                 builder.setTitle(R.string.view_table);
 
                 WebView webView = new WebView(context);
-                webView.getSettings().setUseWideViewPort(true);
-                webView.getSettings().setBuiltInZoomControls(true);
-                webView.getSettings().setSupportZoom(true);
+                WebSettings settings = webView.getSettings();
+                settings.setUseWideViewPort(true);
+                settings.setSupportZoom(true);
+
+                // Use reflection for API 3+ zoom controls to prevent VerifyError on Android 1.0/1.1
+                try {
+                    Method m = settings.getClass().getMethod("setBuiltInZoomControls", boolean.class);
+                    m.invoke(settings, true);
+                } catch (Throwable ignored) {}
+
                 webView.setHorizontalScrollBarEnabled(true);
                 webView.setVerticalScrollBarEnabled(true);
 
@@ -412,18 +433,54 @@ public class MarkdownParser {
     }
 
     private static boolean hasMarkdownSymbols(String text) {
-        if (text == null) return false;
+        if (text == null || text.length() == 0) return false;
         int len = text.length();
         for (int i = 0; i < len; i++) {
             char c = text.charAt(i);
             if (c == '`' || c == '[' || c == '*' || c == '_' || c == '~') {
                 return true;
             }
+            if (c == 'h' && (text.startsWith("http://", i) || text.startsWith("https://", i))) {
+                return true;
+            }
         }
         return false;
     }
 
+    private static int findUrlEnd(String text, int start) {
+        int len = text.length();
+        int i = start;
+        int parenDepth = 0;
+        while (i < len) {
+            char c = text.charAt(i);
+            if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '<' || c == '"' || c == '\'') {
+                break;
+            }
+            if (c == '(') {
+                parenDepth++;
+            } else if (c == ')') {
+                if (parenDepth == 0) break;
+                parenDepth--;
+            } else if (c == ']') {
+                break;
+            }
+            i++;
+        }
+        while (i > start) {
+            char c = text.charAt(i - 1);
+            if (c == '.' || c == ',' || c == ';' || c == ':' || c == '!' || c == '?') {
+                i--;
+            } else {
+                break;
+            }
+        }
+        return i;
+    }
+
     private static void parseInlineFormatting(SpannableStringBuilder sb, String text) {
+        if (text == null || text.length() == 0) {
+            return;
+        }
         if (!hasMarkdownSymbols(text)) {
             sb.append(text);
             return;
@@ -433,6 +490,7 @@ public class MarkdownParser {
         int i = 0;
 
         while (i < len) {
+            // Inline code `code` (raw, no nested styling)
             if (text.charAt(i) == '`') {
                 int end = text.indexOf('`', i + 1);
                 if (end != -1) {
@@ -446,6 +504,7 @@ public class MarkdownParser {
                 }
             }
 
+            // Markdown links [title](url) with nested formatting inside title
             if (text.charAt(i) == '[') {
                 int titleEnd = text.indexOf(']', i + 1);
                 if (titleEnd != -1 && titleEnd + 1 < len && text.charAt(titleEnd + 1) == '(') {
@@ -454,7 +513,7 @@ public class MarkdownParser {
                         String title = text.substring(i + 1, titleEnd);
                         String url = text.substring(titleEnd + 2, urlEnd);
                         int startSpan = sb.length();
-                        sb.append(title);
+                        parseInlineFormatting(sb, title);
                         int endSpan = sb.length();
                         sb.setSpan(new URLSpan(url), startSpan, endSpan, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                         i = urlEnd + 1;
@@ -463,11 +522,27 @@ public class MarkdownParser {
                 }
             }
 
-            if (i + 2 < len && text.startsWith("***", i)) {
-                int end = text.indexOf("***", i + 3);
-                if (end != -1) {
+            // Raw auto-links http:// or https://
+            if (text.charAt(i) == 'h' && (text.startsWith("http://", i) || text.startsWith("https://", i))) {
+                int urlEnd = findUrlEnd(text, i);
+                if (urlEnd > i) {
+                    String url = text.substring(i, urlEnd);
                     int startSpan = sb.length();
-                    sb.append(text.substring(i + 3, end));
+                    sb.append(url);
+                    int endSpan = sb.length();
+                    sb.setSpan(new URLSpan(url), startSpan, endSpan, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    i = urlEnd;
+                    continue;
+                }
+            }
+
+            // Bold + Italic ***text*** or ___text___
+            if (i + 2 < len && (text.startsWith("***", i) || text.startsWith("___", i))) {
+                String delim = text.substring(i, i + 3);
+                int end = text.indexOf(delim, i + 3);
+                if (end != -1 && end > i + 3) {
+                    int startSpan = sb.length();
+                    parseInlineFormatting(sb, text.substring(i + 3, end));
                     int endSpan = sb.length();
                     sb.setSpan(new StyleSpan(Typeface.BOLD_ITALIC), startSpan, endSpan, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                     i = end + 3;
@@ -475,11 +550,13 @@ public class MarkdownParser {
                 }
             }
 
-            if (i + 1 < len && text.startsWith("**", i)) {
-                int end = text.indexOf("**", i + 2);
-                if (end != -1) {
+            // Bold **text** or __text__
+            if (i + 1 < len && (text.startsWith("**", i) || text.startsWith("__", i))) {
+                String delim = text.substring(i, i + 2);
+                int end = text.indexOf(delim, i + 2);
+                if (end != -1 && end > i + 2) {
                     int startSpan = sb.length();
-                    sb.append(text.substring(i + 2, end));
+                    parseInlineFormatting(sb, text.substring(i + 2, end));
                     int endSpan = sb.length();
                     sb.setSpan(new StyleSpan(Typeface.BOLD), startSpan, endSpan, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                     i = end + 2;
@@ -487,24 +564,29 @@ public class MarkdownParser {
                 }
             }
 
+            // Italic *text* or _text_
             if (text.charAt(i) == '*' || text.charAt(i) == '_') {
                 char mark = text.charAt(i);
                 int end = text.indexOf(mark, i + 1);
                 if (end != -1 && end > i + 1) {
-                    int startSpan = sb.length();
-                    sb.append(text.substring(i + 1, end));
-                    int endSpan = sb.length();
-                    sb.setSpan(new StyleSpan(Typeface.ITALIC), startSpan, endSpan, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                    i = end + 1;
-                    continue;
+                    // Prevent false positives on math expressions like "2 * 3 = 6"
+                    if (text.charAt(i + 1) != ' ' && text.charAt(end - 1) != ' ') {
+                        int startSpan = sb.length();
+                        parseInlineFormatting(sb, text.substring(i + 1, end));
+                        int endSpan = sb.length();
+                        sb.setSpan(new StyleSpan(Typeface.ITALIC), startSpan, endSpan, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        i = end + 1;
+                        continue;
+                    }
                 }
             }
 
+            // Strikethrough ~~text~~
             if (i + 1 < len && text.startsWith("~~", i)) {
                 int end = text.indexOf("~~", i + 2);
-                if (end != -1) {
+                if (end != -1 && end > i + 2) {
                     int startSpan = sb.length();
-                    sb.append(text.substring(i + 2, end));
+                    parseInlineFormatting(sb, text.substring(i + 2, end));
                     int endSpan = sb.length();
                     sb.setSpan(new StrikethroughSpan(), startSpan, endSpan, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                     i = end + 2;
