@@ -54,6 +54,8 @@ import io.github.gohoski.numai.api.ApiCallback;
 import io.github.gohoski.numai.api.ApiError;
 import io.github.gohoski.numai.api.ApiResult;
 import io.github.gohoski.numai.api.ApiService;
+import io.github.gohoski.numai.api.GeminiImageResult;
+import io.github.gohoski.numai.api.GeminiImageService;
 import io.github.gohoski.numai.data.ChatManager;
 import io.github.gohoski.numai.data.ConfigManager;
 import io.github.gohoski.numai.data.MessageManager;
@@ -65,6 +67,7 @@ import io.github.gohoski.numai.search.SearchManager;
 import io.github.gohoski.numai.search.SearchResult;
 import io.github.gohoski.numai.search.WebFetcher;
 import io.github.gohoski.numai.ui.MessageAdapter;
+import io.github.gohoski.numai.util.Base64;
 import io.github.gohoski.numai.util.SSLDisabler;
 
 public class MainActivity extends Activity {
@@ -89,6 +92,7 @@ public class MainActivity extends Activity {
     private static final StringBuilder matchingTagBuffer = new StringBuilder();
 
     private ApiService apiService;
+    private GeminiImageService geminiImageService;
     private ConfigManager config;
 
     private ListView msgList;
@@ -97,6 +101,7 @@ public class MainActivity extends Activity {
     private MessageAdapter adapter;
     private ImageButton sendBtn;
     private ToggleButton thinkingToggle;
+    private ToggleButton imageToggle;
     private ProgressBar progressBar;
     private TextView imgCount;
     private boolean autoScroll = true;
@@ -153,12 +158,14 @@ public class MainActivity extends Activity {
         }
 
         apiService = new ApiService(this);
+        geminiImageService = new GeminiImageService(this);
         msgList = (ListView) findViewById(R.id.messages_list);
         helloLayout = findViewById(R.id.hello_layout);
         input = (EditText) findViewById(R.id.message_input);
         sendBtn = (ImageButton) findViewById(R.id.send_button);
         attachBtn = (ImageButton) findViewById(R.id.attach_button);
         thinkingToggle = (ToggleButton) findViewById(R.id.thinking);
+        imageToggle = (ToggleButton) findViewById(R.id.image_generation);
         progressBar = (ProgressBar) findViewById(R.id.waiting);
         imgCount = (TextView) findViewById(R.id.img_count);
 
@@ -182,6 +189,14 @@ public class MainActivity extends Activity {
                 startActivityForResult(Intent.createChooser(intent, getString(R.string.select_picture)), REQUEST_CODE_PICK_IMAGE);
             }
         });
+
+        imageToggle.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                updateImageModeUi();
+            }
+        });
+        updateImageModeUi();
 
         adapter = new MessageAdapter(this, MessageManager.getInstance().getMessages());
         msgList.setAdapter(adapter);
@@ -627,13 +642,20 @@ public class MainActivity extends Activity {
 
     private void sendMessage() {
         String text = input.getText().toString().trim();
+        final boolean generateImage = imageToggle != null && imageToggle.isChecked();
+        if (generateImage && text.length() == 0) {
+            Toast.makeText(this, R.string.gemini_image_prompt_required, Toast.LENGTH_SHORT).show();
+            return;
+        }
         if (text.length() == 0 && inputImages.isEmpty()) return;
         if (isGenerating) {
             stopGeneration();
         }
         hideKeyboard();
         autoScroll = true;
-        MessageManager.getInstance().addMessage(new Message(Role.USER, text, new ArrayList<String>(inputImages), null));
+        currentStream = null;
+        final List<String> selectedImages = new ArrayList<String>(inputImages);
+        MessageManager.getInstance().addMessage(new Message(Role.USER, text, selectedImages, null));
         ChatManager.getInstance().onMessageAdded(this);
         input.setText("");
         sendBtn.setImageResource(R.drawable.ic_action_stop);
@@ -645,7 +667,11 @@ public class MainActivity extends Activity {
         adapter.notifyDataSetChanged();
         updateEmptyState();
         scrollToBottom();
-        requestAICompletion();
+        if (generateImage) {
+            requestGeminiImage(text, selectedImages);
+        } else {
+            requestAICompletion();
+        }
     }
 
     private void requestAICompletion() {
@@ -685,6 +711,86 @@ public class MainActivity extends Activity {
                 });
             }
         });
+    }
+
+    private void requestGeminiImage(final String prompt, final List<String> selectedImages) {
+        isThinkingState = false;
+        isGenerating = true;
+        isCancelled = false;
+        final int genId = ++currentGenerationId;
+
+        geminiImageService.generate(prompt, selectedImages, new ApiCallback<GeminiImageResult>() {
+            @Override
+            public void onSuccess(final GeminiImageResult result) {
+                if (genId != currentGenerationId || isCancelled) return;
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (genId != currentGenerationId || isCancelled) return;
+                        saveGeminiImageResult(result);
+                    }
+                });
+            }
+
+            @Override
+            public void onError(final ApiError error) {
+                if (genId != currentGenerationId || isCancelled) return;
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (genId != currentGenerationId || isCancelled) return;
+                        handleStreamError(error.getMessage());
+                    }
+                });
+            }
+        });
+    }
+
+    private void saveGeminiImageResult(GeminiImageResult result) {
+        String mimeType = result.getMimeType();
+        boolean isPng = "image/png".equalsIgnoreCase(mimeType);
+        String fileName = "gemini_img_" + nextImageId++ + (isPng ? ".png" : ".jpg");
+        FileOutputStream fos = null;
+        boolean saved = false;
+        try {
+            byte[] bytes = Base64.decode(result.getImageData());
+            fos = openFileOutput(fileName, Context.MODE_PRIVATE);
+            fos.write(bytes);
+            fos.flush();
+            saved = bytes.length > 0;
+        } catch (Exception e) {
+            Log.e("GeminiImage", "Could not save generated image", e);
+        } finally {
+            if (fos != null) {
+                try { fos.close(); } catch (IOException ignored) {}
+            }
+        }
+
+        if (!saved) {
+            deleteFile(fileName);
+            handleStreamError(getString(R.string.gemini_image_save_failed));
+            return;
+        }
+
+        String description = result.getText();
+        if (description == null || description.trim().length() == 0) {
+            description = getString(R.string.gemini_image_done);
+        }
+        Message generated = new Message(Role.ASSISTANT, description, getString(R.string.gemini_image_model_label));
+        generated.setOutputImage(fileName);
+        MessageManager.getInstance().addMessage(generated);
+        ChatManager.getInstance().onMessageAdded(this);
+        resetUIState();
+    }
+
+    private void updateImageModeUi() {
+        if (imageToggle == null || thinkingToggle == null || input == null) return;
+        boolean generatingImage = imageToggle.isChecked();
+        if (generatingImage) {
+            thinkingToggle.setChecked(false);
+        }
+        thinkingToggle.setEnabled(!generatingImage);
+        input.setHint(generatingImage ? R.string.gemini_image_prompt_hint : R.string.ask_anything);
     }
 
     private void startResponseStream(final int genId, final InputStream stream, String model, final boolean thinkingEnabled) {
