@@ -653,7 +653,6 @@ public class MainActivity extends Activity {
         }
         hideKeyboard();
         autoScroll = true;
-        currentStream = null;
         final List<String> selectedImages = new ArrayList<String>(inputImages);
         MessageManager.getInstance().addMessage(new Message(Role.USER, text, selectedImages, null));
         ChatManager.getInstance().onMessageAdded(this);
@@ -716,30 +715,34 @@ public class MainActivity extends Activity {
     private void requestGeminiImage(final String prompt, final List<String> selectedImages) {
         isThinkingState = false;
         isGenerating = true;
-        isCancelled = false;
-        final int genId = ++currentGenerationId;
+        currentAssistantMsg = null;
+        isThinkingEnabled = false;
+        globalCancelled = false;
+        final int genId = ++globalGenerationId;
 
         geminiImageService.generate(prompt, selectedImages, new ApiCallback<GeminiImageResult>() {
             @Override
             public void onSuccess(final GeminiImageResult result) {
-                if (genId != currentGenerationId || isCancelled) return;
-                runOnUiThread(new Runnable() {
+                if (genId != globalGenerationId || globalCancelled) return;
+                runOnCurrentActivity(new Runnable() {
                     @Override
                     public void run() {
-                        if (genId != currentGenerationId || isCancelled) return;
-                        saveGeminiImageResult(result);
+                        if (genId != globalGenerationId || globalCancelled) return;
+                        MainActivity act = currentActivityInstance;
+                        if (act != null) act.saveGeminiImageResult(result);
                     }
                 });
             }
 
             @Override
             public void onError(final ApiError error) {
-                if (genId != currentGenerationId || isCancelled) return;
-                runOnUiThread(new Runnable() {
+                if (genId != globalGenerationId || globalCancelled) return;
+                runOnCurrentActivity(new Runnable() {
                     @Override
                     public void run() {
-                        if (genId != currentGenerationId || isCancelled) return;
-                        handleStreamError(error.getMessage());
+                        if (genId != globalGenerationId || globalCancelled) return;
+                        MainActivity act = currentActivityInstance;
+                        if (act != null) act.handleStreamError(error.getMessage());
                     }
                 });
             }
