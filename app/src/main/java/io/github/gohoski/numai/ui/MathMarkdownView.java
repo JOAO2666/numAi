@@ -10,12 +10,10 @@ import android.webkit.WebViewClient;
 import android.webkit.JavascriptInterface;
 import android.view.ViewGroup;
 
-/**
- * A small, self-contained Markdown and LaTeX renderer.  KaTeX and its fonts
- * live in android_asset, so mathematical messages keep working without a
- * network connection.
- */
+/** Markdown renderer that delegates correctly delimited formulas to MathJax. */
 public class MathMarkdownView extends WebView {
+    private static final String MATHJAX_BASE_URL =
+            "https://cdn.jsdelivr.net/npm/mathjax@3/es5/";
     private String lastMarkdown = null;
     private int lastHeight = -1;
 
@@ -47,12 +45,11 @@ public class MathMarkdownView extends WebView {
         settings.setSupportZoom(false);
         settings.setLoadWithOverviewMode(false);
         settings.setUseWideViewPort(false);
-        if (Integer.parseInt(Build.VERSION.SDK) >= 8) {
-            settings.setBlockNetworkLoads(true);
-        }
+        // MathJax is loaded from the configured CDN. Responses without math
+        // never enter this view, so the native parser remains the offline
+        // fallback for legacy devices or unavailable connectivity.
+        if (Integer.parseInt(Build.VERSION.SDK) >= 8) settings.setBlockNetworkLoads(false);
 
-        // Only trusted, bundled JavaScript is loaded.  The Markdown itself is
-        // escaped before it is put in the document.
         addJavascriptInterface(new HeightBridge(this), "NumAiMath");
         setWebViewClient(new WebViewClient());
     }
@@ -81,7 +78,8 @@ public class MathMarkdownView extends WebView {
         if (safeMarkdown.equals(lastMarkdown)) return;
         lastMarkdown = safeMarkdown;
         lastHeight = -1;
-        loadDataWithBaseURL("file:///android_asset/katex/", buildDocument(safeMarkdown), "text/html", "UTF-8", null);
+        loadDataWithBaseURL(MATHJAX_BASE_URL, buildDocument(safeMarkdown),
+                "text/html", "UTF-8", null);
     }
 
     public void updateHeight(final int height) {
@@ -120,16 +118,17 @@ public class MathMarkdownView extends WebView {
         html.append("<!DOCTYPE html><html><head>");
         html.append("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">");
         html.append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">");
-        html.append("<link rel=\"stylesheet\" href=\"katex.min.css\">");
+        html.append("<script>window.MathJax={tex:{inlineMath:[[\"$\",\"$\"],[\"\\\\(\",\"\\\\)\"]],displayMath:[[\"$$\",\"$$\"],[\"\\\\[\",\"\\\\]\"]],processEscapes:true,packages:{'[+]':['noerrors','noundefined']}},options:{skipHtmlTags:['script','noscript','style','textarea','pre','code']}};</script>");
+        html.append("<script async src=\"tex-chtml.js\"></script>");
         html.append("<style>");
         html.append("html,body{margin:0;padding:0;background:transparent;color:#f2f2f2;font-family:sans-serif;font-size:14px;line-height:1.38;word-wrap:break-word;}");
-        html.append(".p{margin:0 0 7px 0}.h1{font-size:1.38em;font-weight:bold;margin:5px 0 8px 0}.h2{font-size:1.24em;font-weight:bold;margin:5px 0 7px 0}.h3{font-size:1.12em;font-weight:bold;margin:4px 0 6px 0}.li{margin:0 0 3px 12px;padding-left:4px}.quote{border-left:2px solid #2b88d9;padding-left:8px;color:#d0d0d0;margin:3px 0 7px 0}.code{font-family:monospace;background:#2b2b2b;padding:1px 3px}.block-code{white-space:pre-wrap;font-family:monospace;background:#242424;padding:7px;margin:0 0 7px 0;overflow-x:auto}.math-display{display:block;overflow-x:auto;overflow-y:hidden;margin:10px 0}.math-inline{display:inline}.katex-display{margin:0.35em 0}a{color:#64b5f6;text-decoration:none}pre{margin:0}");
+        html.append(".p{margin:0 0 7px 0}.h1{font-size:1.38em;font-weight:bold;margin:5px 0 8px 0}.h2{font-size:1.24em;font-weight:bold;margin:5px 0 7px 0}.h3{font-size:1.12em;font-weight:bold;margin:4px 0 6px 0}.li{margin:0 0 3px 12px;padding-left:4px}.quote{border-left:2px solid #2b88d9;padding-left:8px;color:#d0d0d0;margin:3px 0 7px 0}.code{font-family:monospace;background:#2b2b2b;padding:1px 3px}.block-code{white-space:pre-wrap;font-family:monospace;background:#242424;padding:7px;margin:0 0 7px 0;overflow-x:auto}.MathJax{color:#f2f2f2}.MathJax_Display{overflow-x:auto;overflow-y:hidden;margin:10px 0}a{color:#64b5f6;text-decoration:none}pre{margin:0}");
         html.append("</style></head><body>");
         appendMarkdown(html, markdown);
-        html.append("<script src=\"katex.min.js\"></script><script>");
+        html.append("<script>");
         html.append("function reportHeight(){var h=Math.ceil(document.body.scrollHeight*(window.devicePixelRatio||1));if(window.NumAiMath){window.NumAiMath.setHeight(h);}};");
-        html.append("function renderMath(){var nodes=document.getElementsByClassName('math');for(var i=0;i<nodes.length;i++){var n=nodes[i];try{katex.render(n.getAttribute('data-tex')||'',n,{displayMode:n.className.indexOf('math-display')>=0,throwOnError:false,strict:'ignore'});}catch(e){n.textContent=n.getAttribute('data-tex')||'';}}reportHeight();setTimeout(reportHeight,80);}");
-        html.append("if(window.addEventListener){window.addEventListener('load',renderMath,false);}else{window.onload=renderMath;}");
+        html.append("function renderMathJax(){if(window.MathJax&&window.MathJax.typesetPromise){window.MathJax.typesetPromise().then(function(){reportHeight();setTimeout(reportHeight,120);}).catch(function(){reportHeight();});}else{reportHeight();setTimeout(renderMathJax,120);}};");
+        html.append("if(window.addEventListener){window.addEventListener('load',renderMathJax,false);}else{window.onload=renderMathJax;}");
         html.append("</script></body></html>");
         return html.toString();
     }
@@ -182,9 +181,9 @@ public class MathMarkdownView extends WebView {
                 break;
             }
             if (range.start > cursor) html.append(formatText(text.substring(cursor, range.start)));
-            html.append("<span class=\"math ");
-            html.append(range.display ? "math-display" : "math-inline");
-            html.append("\" data-tex=\"").append(escapeHtml(range.tex)).append("\"></span>");
+            html.append(range.display ? "\\[" : "\\(");
+            html.append(escapeHtml(range.tex));
+            html.append(range.display ? "\\]" : "\\)");
             cursor = range.end;
         }
     }

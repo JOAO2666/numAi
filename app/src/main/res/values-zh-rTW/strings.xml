@@ -68,7 +68,7 @@
     <string name="regenerate">重新產生</string>
     <string name="disable_tools_img">附加圖片時停用工具</string>
     <string name="disable_tools_img_">啟用後，附加圖片時將不會向模型傳送網路搜尋與網路擷取工具，進而提高與視覺模型的相容性。</string>
-+    <string name="latex_system_instruction">When mathematical notation is useful, write it in LaTeX: use $...$ for inline math and $$...$$ for displayed equations. Do not put formulas inside Markdown code fences.</string>
+    <string name="latex_system_instruction">When mathematical notation is useful, always wrap every formula, symbol, index, and unit expression in LaTeX delimiters: use $...$ for inline math and $$...$$ for displayed equations. Never write LaTeX commands bare in normal text. Do not put formulas inside Markdown code fences.</string>
     <string name="gemini_image_toggle">Image</string>
     <string name="gemini_image_prompt_hint">Describe the image to create or edit</string>
     <string name="gemini_image_settings">Gemini image generation</string>

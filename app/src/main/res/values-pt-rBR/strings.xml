@@ -69,7 +69,7 @@
     <string name="search_engine">Mecanismo de pesquisa</string>
     <string name="search_engine_">O Bing é compatível com Android 1.0+. O DuckDuckGo requer Wolfius no Android &lt;4.4 e pode trazer mais resultados, mas pode ser bloqueado; por isso, o Bing é recomendado.</string>
     <string name="regenerate">Gerar novamente</string>
-    <string name="latex_system_instruction">Quando a notação matemática for útil, escreva em LaTeX: use $...$ para matemática em linha e $$...$$ para equações destacadas. Não coloque fórmulas em blocos de código Markdown.</string>
+    <string name="latex_system_instruction">Quando a notação matemática for útil, coloque sempre cada fórmula, símbolo, índice e unidade entre delimitadores LaTeX: use $...$ para matemática em linha e $$...$$ para equações destacadas. Nunca escreva comandos LaTeX soltos no texto normal. Não coloque fórmulas em blocos de código Markdown.</string>
     <string name="gemini_image_toggle">Imagem</string>
     <string name="gemini_image_prompt_hint">Descreva a imagem que deseja criar ou editar</string>
     <string name="gemini_image_settings">Geração de imagens Gemini</string>
