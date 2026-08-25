@@ -65,8 +65,12 @@ public class MarkdownParser {
 
             String line = text.substring(lineStart, curEnd);
             boolean isLastLine = (lineEnd == len);
+            boolean isCodeFence = line.trim().startsWith("```");
+            if (!inCodeBlock && !isCodeFence) {
+                line = LatexFormatter.format(line);
+            }
 
-            if (line.trim().startsWith("```")) {
+            if (isCodeFence) {
                 if (!inCodeBlock) {
                     inCodeBlock = true;
                     codeBlockStart = sb.length();

@@ -233,16 +233,10 @@ public class MessageAdapter extends ArrayAdapter<Message> {
 
         if (displayRaw != null && displayRaw.length() != 0) {
             holder.response.setVisibility(View.VISIBLE);
-            if (MathMarkdownView.canRender(displayRaw)) {
-                holder.messageText.setVisibility(View.GONE);
-                holder.mathMarkdown.setVisibility(View.VISIBLE);
-                holder.mathMarkdown.setMarkdown(displayRaw);
-            } else {
-                holder.mathMarkdown.setVisibility(View.GONE);
-                holder.messageText.setVisibility(View.VISIBLE);
-                holder.messageText.setMovementMethod(LinkMovementMethod.getInstance());
-                holder.messageText.setText(message.getParsedDisplayContent(context, false));
-            }
+            holder.mathMarkdown.setVisibility(View.GONE);
+            holder.messageText.setVisibility(View.VISIBLE);
+            holder.messageText.setMovementMethod(LinkMovementMethod.getInstance());
+            holder.messageText.setText(message.getParsedDisplayContent(context, false));
         } else {
             holder.response.setVisibility(holder.generatedImage.getVisibility() == View.VISIBLE ? View.VISIBLE : View.GONE);
             holder.mathMarkdown.setVisibility(View.GONE);
