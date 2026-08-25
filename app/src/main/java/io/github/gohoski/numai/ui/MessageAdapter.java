@@ -236,14 +236,32 @@ public class MessageAdapter extends ArrayAdapter<Message> {
             if (MathMarkdownView.canRender(displayRaw)) {
                 holder.messageText.setVisibility(View.GONE);
                 holder.mathMarkdown.setVisibility(View.VISIBLE);
+                final MathMarkdownView mathView = holder.mathMarkdown;
+                final String mathRaw = displayRaw;
+                final Message boundMessage = message;
+                final ReceivedViewHolder boundHolder = holder;
+                mathView.setRenderErrorListener(new MathMarkdownView.RenderErrorListener() {
+                    @Override
+                    public void onRenderError() {
+                        if (mathRaw.equals(mathView.getMarkdown())) {
+                            mathView.setVisibility(View.GONE);
+                            boundHolder.messageText.setVisibility(View.VISIBLE);
+                            boundHolder.messageText.setMovementMethod(LinkMovementMethod.getInstance());
+                            boundHolder.messageText.setText(
+                                    boundMessage.getParsedDisplayContent(context, false));
+                        }
+                    }
+                });
                 holder.mathMarkdown.setMarkdown(displayRaw);
             } else {
+                holder.mathMarkdown.setRenderErrorListener(null);
                 holder.mathMarkdown.setVisibility(View.GONE);
                 holder.messageText.setVisibility(View.VISIBLE);
                 holder.messageText.setMovementMethod(LinkMovementMethod.getInstance());
                 holder.messageText.setText(message.getParsedDisplayContent(context, false));
             }
         } else {
+            holder.mathMarkdown.setRenderErrorListener(null);
             holder.response.setVisibility(holder.generatedImage.getVisibility() == View.VISIBLE ? View.VISIBLE : View.GONE);
             holder.mathMarkdown.setVisibility(View.GONE);
             holder.messageText.setVisibility(View.VISIBLE);

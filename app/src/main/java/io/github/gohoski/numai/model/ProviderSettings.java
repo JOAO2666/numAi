@@ -26,7 +26,7 @@ public class ProviderSettings {
     public String getBaseUrl() { return baseUrl; }
     public void setBaseUrl(String value) { baseUrl = value == null ? "" : value; }
     public String getApiKey() { return apiKey; }
-    public void setApiKey(String value) { apiKey = value == null ? "" : value; }
+    public void setApiKey(String value) { apiKey = value == null ? "" : value.trim(); }
     public String getChatModel() { return chatModel; }
     public void setChatModel(String value) { chatModel = value == null ? "" : value; }
     public String getThinkingModel() { return thinkingModel; }

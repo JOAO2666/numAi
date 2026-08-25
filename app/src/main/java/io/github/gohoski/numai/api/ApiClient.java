@@ -44,7 +44,8 @@ public class ApiClient {
                 baseUrl = "";
             }
 
-            String fullUrl = baseUrl + request.getEndpoint();
+            String fullUrl = joinUrl(baseUrl, request.getEndpoint());
+            URL origin = new URL(fullUrl);
             Map<String, List<String>> combinedHeaders = new HashMap<String, List<String>>();
             int redirectCount = 0;
 
@@ -54,7 +55,8 @@ public class ApiClient {
                 connection.setInstanceFollowRedirects(false); // Manual redirect handling to preserve Set-Cookie
                 connection.setRequestMethod(request.getMethod());
 
-                if (apiKey != null && apiKey.length() > 0) {
+                // Never forward a provider credential to a different origin.
+                if (apiKey != null && apiKey.length() > 0 && sameOrigin(origin, url)) {
                     connection.setRequestProperty("Authorization", "Bearer " + apiKey);
                 }
                 connection.setRequestProperty("User-Agent", "numAi/" + BuildConfig.VERSION_NAME + " (https://github.com/gohoski/numAi)");
@@ -62,6 +64,7 @@ public class ApiClient {
 //                connection.setRequestProperty("Connection", "close");
 
                 for (Map.Entry<String, String> entry : request.getHeaders().entrySet()) {
+                    if (!sameOrigin(origin, url) && isSensitiveHeader(entry.getKey())) continue;
                     connection.setRequestProperty(entry.getKey(), entry.getValue());
                 }
 
@@ -107,13 +110,14 @@ public class ApiClient {
                 // Merge response headers (specifically Set-Cookie) across redirects
                 if (connection.getHeaderFields() != null) {
                     for (Map.Entry<String, List<String>> entry : connection.getHeaderFields().entrySet()) {
-                        if (entry.getKey() != null && "Set-Cookie".equalsIgnoreCase(entry.getKey())) {
+                        if (entry.getKey() != null && "Set-Cookie".equalsIgnoreCase(entry.getKey()) &&
+                                sameOrigin(origin, url)) {
                             List<String> cookies = combinedHeaders.get("Set-Cookie");
                             if (cookies == null) {
                                 cookies = new ArrayList<String>();
                                 combinedHeaders.put("Set-Cookie", cookies);
                             }
-                            cookies.addAll(entry.getValue());
+                            if (entry.getValue() != null) cookies.addAll(entry.getValue());
                         } else if (entry.getKey() != null) {
                             combinedHeaders.put(entry.getKey(), entry.getValue());
                         }
@@ -123,23 +127,28 @@ public class ApiClient {
                 if (statusCode == HttpURLConnection.HTTP_MOVED_PERM
                         || statusCode == HttpURLConnection.HTTP_MOVED_TEMP
                         || statusCode == HttpURLConnection.HTTP_SEE_OTHER
-                        || statusCode == 307) {
+                        || statusCode == 307
+                        || statusCode == 308) {
                     String loc = connection.getHeaderField("Location");
                     if (loc != null && loc.length() > 0) {
-                        fullUrl = loc.startsWith("http") ? loc : baseUrl + loc;
+                        fullUrl = new URL(url, loc).toString();
                         redirectCount++;
                         connection.disconnect();
 
                         // Update Cookie header for the redirected request if cookies were set
                         List<String> cookies = combinedHeaders.get("Set-Cookie");
-                        if (cookies != null && !cookies.isEmpty()) {
+                        URL redirectedUrl = new URL(fullUrl);
+                        if (sameOrigin(origin, redirectedUrl) && cookies != null && !cookies.isEmpty()) {
                             StringBuilder cookieHeader = new StringBuilder();
                             for (String c : cookies) {
+                                if (c == null) continue;
                                 String pair = c.split(";")[0].trim();
                                 if (cookieHeader.length() > 0) cookieHeader.append("; ");
                                 cookieHeader.append(pair);
                             }
-                            request.addHeader("Cookie", cookieHeader.toString());
+                            if (cookieHeader.length() > 0) {
+                                request.addHeader("Cookie", cookieHeader.toString());
+                            }
                         }
                         continue;
                     }
@@ -179,8 +188,9 @@ public class ApiClient {
         try {
             ApiResponse response = execute(request);
             return readInputStreamToString(response.getBody());
+        } catch (ApiError e) {
+            throw e;
         } catch (Exception e) {
-            e.printStackTrace();
             throw new ApiError(e.getMessage());
         }
     }
@@ -205,5 +215,36 @@ public class ApiClient {
                 inputStream.close();
             } catch (IOException ignored) {}
         }
+    }
+
+    /** Joins provider URLs safely when a user pasted a trailing slash. */
+    static String joinUrl(String baseUrl, String endpoint) {
+        String base = baseUrl == null ? "" : baseUrl.trim();
+        String path = endpoint == null ? "" : endpoint.trim();
+        if (base.length() == 0) return path;
+        if (path.length() == 0) return base;
+        if (base.endsWith("/") && path.startsWith("/")) {
+            return base.substring(0, base.length() - 1) + path;
+        }
+        if (!base.endsWith("/") && !path.startsWith("/")) {
+            return base + "/" + path;
+        }
+        return base + path;
+    }
+
+    private static boolean sameOrigin(URL first, URL second) {
+        if (first == null || second == null) return false;
+        int firstPort = first.getPort() == -1 ? first.getDefaultPort() : first.getPort();
+        int secondPort = second.getPort() == -1 ? second.getDefaultPort() : second.getPort();
+        return first.getProtocol().equalsIgnoreCase(second.getProtocol()) &&
+                first.getHost().equalsIgnoreCase(second.getHost()) &&
+                firstPort == secondPort;
+    }
+
+    private static boolean isSensitiveHeader(String name) {
+        if (name == null) return false;
+        String lower = name.toLowerCase();
+        return "authorization".equals(lower) || "cookie".equals(lower) ||
+                lower.contains("api-key") || lower.contains("apikey");
     }
 }

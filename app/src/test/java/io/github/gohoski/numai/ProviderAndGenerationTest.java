@@ -1,6 +1,7 @@
 package io.github.gohoski.numai;
 
 import java.util.ArrayList;
+import java.io.ByteArrayInputStream;
 
 import io.github.gohoski.numai.model.ModelInfo;
 import io.github.gohoski.numai.util.GenerationRegistry;
@@ -70,5 +71,29 @@ public class ProviderAndGenerationTest {
         assertTrue(registry.cancel("chat-a", first.getGenerationId()));
         assertFalse(registry.isActive("chat-a", first.getGenerationId()));
         assertTrue(registry.isActive("chat-b", second.getGenerationId()));
+        assertEquals(second.getGenerationId(), registry.getActiveGenerationId("chat-b"));
+    }
+
+    @Test public void cancellingGenerationClosesItsNetworkStream() throws Exception {
+        GenerationRegistry registry = new GenerationRegistry();
+        GenerationRegistry.Generation generation = registry.start("chat-a", "message-a");
+        TrackingStream stream = new TrackingStream();
+        generation.setStream(stream);
+
+        assertTrue(registry.cancel("chat-a", generation.getGenerationId()));
+        assertTrue(stream.closed);
+    }
+
+    private static class TrackingStream extends ByteArrayInputStream {
+        boolean closed;
+
+        TrackingStream() {
+            super(new byte[0]);
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
     }
 }

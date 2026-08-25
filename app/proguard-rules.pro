@@ -12,6 +12,11 @@
 #   public *;
 #}
 
+# MathMarkdownView calls these members from JavaScript and from a listener
+# attached by MessageAdapter. Keep the bridge and its descriptor in release.
+-keep class io.github.gohoski.numai.ui.MathMarkdownView$HeightBridge { public *; }
+-keep interface io.github.gohoski.numai.ui.MathMarkdownView$RenderErrorListener
+
 # Uncomment this to preserve the line number information for
 # debugging stack traces.
 #-keepattributes SourceFile,LineNumberTable

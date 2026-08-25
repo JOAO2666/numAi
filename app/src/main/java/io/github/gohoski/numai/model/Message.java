@@ -29,6 +29,8 @@ public class Message {
     private transient CharSequence cachedParsedThinkContent = null;
     private transient String cachedThinkingRaw = null;
     private transient String cachedDisplayRaw = null;
+    private transient boolean cachedDisplayIsGenerating;
+    private transient boolean cachedThinkIsGenerating;
 
     public Message(Role role, String content) {
         this.role = role;
@@ -129,6 +131,8 @@ public class Message {
         cachedParsedThinkContent = null;
         cachedThinkingRaw = null;
         cachedDisplayRaw = null;
+        cachedDisplayIsGenerating = false;
+        cachedThinkIsGenerating = false;
     }
 
     public String getThinkingRaw() {
@@ -143,18 +147,27 @@ public class Message {
 
     public CharSequence getParsedDisplayContent(Context context, boolean isGenerating) {
         ensureParsedStructure();
-        if (cachedParsedDisplayContent == null) {
+        if (needsParsedCacheRefresh(cachedParsedDisplayContent,
+                cachedDisplayIsGenerating, isGenerating)) {
             cachedParsedDisplayContent = MarkdownParser.parse(context, cachedDisplayRaw, isGenerating);
+            cachedDisplayIsGenerating = isGenerating;
         }
         return cachedParsedDisplayContent;
     }
 
     public CharSequence getParsedThinkContent(Context context, boolean isGenerating) {
         ensureParsedStructure();
-        if (cachedParsedThinkContent == null) {
+        if (needsParsedCacheRefresh(cachedParsedThinkContent,
+                cachedThinkIsGenerating, isGenerating)) {
             cachedParsedThinkContent = MarkdownParser.parse(context, cachedThinkingRaw, isGenerating);
+            cachedThinkIsGenerating = isGenerating;
         }
         return cachedParsedThinkContent;
+    }
+
+    static boolean needsParsedCacheRefresh(CharSequence cached,
+            boolean cachedIsGenerating, boolean isGenerating) {
+        return cached == null || cachedIsGenerating != isGenerating;
     }
 
     private void ensureParsedStructure() {

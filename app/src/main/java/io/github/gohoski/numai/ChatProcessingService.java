@@ -91,6 +91,10 @@ public class ChatProcessingService extends Service {
         return REGISTRY.isActive(chatId, generationId);
     }
 
+    public static String getActiveGenerationId(String chatId) {
+        return REGISTRY.getActiveGenerationId(chatId);
+    }
+
     public static void cancelGeneration(Context context, String chatId,
             String generationId) {
         REGISTRY.cancel(chatId, generationId);
@@ -114,6 +118,9 @@ public class ChatProcessingService extends Service {
             final String chatId = intent.getStringExtra(EXTRA_CHAT_ID);
             final String messageId = intent.getStringExtra(EXTRA_MESSAGE_ID);
             final String generationId = intent.getStringExtra(EXTRA_GENERATION_ID);
+            if (REGISTRY.getActiveGenerationId(chatId) != null) {
+                return START_NOT_STICKY;
+            }
             final GenerationRegistry.Generation generation =
                     REGISTRY.start(chatId, messageId, generationId);
             executor.submit(new Runnable() {
@@ -162,11 +169,11 @@ public class ChatProcessingService extends Service {
                 thinking, snapshot,
                 new ApiCallback<ApiResult>() {
                     public void onSuccess(final ApiResult result) {
+                        generation.setStream(result.getResult());
                         if (generation.isCancelled()) {
                             finish(generation);
                             return;
                         }
-                        generation.setStream(result.getResult());
                         executor.submit(new Runnable() {
                             public void run() {
                                 consume(intent, generation, chat, assistant,
@@ -196,6 +203,8 @@ public class ChatProcessingService extends Service {
         boolean hasThinking = false;
         List<StreamToolCall> streamToolCalls = new ArrayList<StreamToolCall>();
         BufferedReader reader = null;
+        boolean handedOffToNextRequest = false;
+        long lastPersistAt = 0L;
         try {
             reader = new BufferedReader(new InputStreamReader(stream, "UTF-8"), 8192);
             String line;
@@ -222,8 +231,12 @@ public class ChatProcessingService extends Service {
                     String display = hasThinking ? "<think>" + thinking +
                             "</think>" + content : content.toString();
                     assistant.setContent(display);
-                    Chat currentChat = chatManager.getChatById(generation.getChatId());
-                    if (currentChat != null) chatManager.onMessageAdded(this, currentChat);
+                    long now = System.currentTimeMillis();
+                    if (now - lastPersistAt >= 250L) {
+                        Chat currentChat = chatManager.getChatById(generation.getChatId());
+                        if (currentChat != null) chatManager.onMessageAdded(this, currentChat);
+                        lastPersistAt = now;
+                    }
                 } catch (Exception ignored) {}
             }
             if (!generation.isCancelled() && streamToolCalls.isEmpty() &&
@@ -234,7 +247,7 @@ public class ChatProcessingService extends Service {
             Chat currentChat = chatManager.getChatById(generation.getChatId());
             if (currentChat != null) chatManager.onMessageAdded(this, currentChat);
             if (!generation.isCancelled() && !streamToolCalls.isEmpty()) {
-                executeToolCalls(intent, generation, chat, assistant, streamToolCalls,
+                handedOffToNextRequest = executeToolCalls(intent, generation, chat, assistant, streamToolCalls,
                         thinkingEnabled, snapshot, toolRound);
                 return;
             }
@@ -250,7 +263,7 @@ public class ChatProcessingService extends Service {
             if (reader != null) {
                 try { reader.close(); } catch (IOException ignored) {}
             }
-            finish(generation);
+            if (!handedOffToNextRequest) finish(generation);
         }
     }
 
@@ -277,7 +290,7 @@ public class ChatProcessingService extends Service {
         } catch (Exception ignored) {}
     }
 
-    private void executeToolCalls(Intent intent,
+    private boolean executeToolCalls(Intent intent,
             GenerationRegistry.Generation generation, Chat chat, Message assistant,
             List<StreamToolCall> calls, boolean thinking, ProviderSnapshot snapshot,
             int toolRound) {
@@ -304,8 +317,13 @@ public class ChatProcessingService extends Service {
         assistant.setSearchResultCount(0);
         chatManager.onMessageAdded(this, chat);
         if (executable.isEmpty() || toolRound >= MAX_TOOL_ROUNDS) {
+            if (assistant.getContent() == null || assistant.getContent().trim().length() == 0) {
+                assistant.setContent(getString(R.string.error));
+                assistant.setAsError();
+                chatManager.onMessageAdded(this, chat);
+            }
             finish(generation);
-            return;
+            return false;
         }
 
         SearchEngine searchEngine = SearchManager.getInstance().getEngine(this,
@@ -317,7 +335,7 @@ public class ChatProcessingService extends Service {
             String resultText;
             if ("web_search".equals(call.name)) {
                 resultText = executeSearch(searchEngine, call);
-                if (!resultText.contains("\"status\":\"error\"")) totalResults++;
+                totalResults += countSearchResults(resultText);
             } else {
                 resultText = executeFetch(webFetcher, call);
                 if (resultText.length() > 0 && !resultText.startsWith("Error:")) totalResults++;
@@ -331,9 +349,10 @@ public class ChatProcessingService extends Service {
         chatManager.onMessageAdded(this, chat);
         if (generation.isCancelled()) {
             finish(generation);
-            return;
+            return false;
         }
         requestCompletion(intent, generation, chat, thinking, toolRound + 1);
+        return true;
     }
 
     private String executeSearch(SearchEngine engine, StreamToolCall call) {
@@ -372,6 +391,16 @@ public class ChatProcessingService extends Service {
         } catch (Exception error) {
             return "Error: " + (error.getMessage() == null ? getString(R.string.error) :
                     error.getMessage());
+        }
+    }
+
+    private int countSearchResults(String resultText) {
+        try {
+            JSONObject response = JSON.getObject(resultText);
+            JSONArray results = response.getNullableArray("results");
+            return results == null ? 0 : results.size();
+        } catch (Exception ignored) {
+            return 0;
         }
     }
 
@@ -471,6 +500,7 @@ public class ChatProcessingService extends Service {
 
     @Override
     public void onDestroy() {
+        REGISTRY.cancelAll();
         if (executor != null) executor.shutdownNow();
         super.onDestroy();
     }

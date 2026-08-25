@@ -36,6 +36,7 @@
     <string name="fail_send">Mesaj gönderilemedi:\n%s</string>
     <string name="fail_send_vision">Mesaj gönderilemedi:\n%s\n\n<b>Görsel algılama desteği için modeli Gemma, Gemini, Qwen, GPT veya Kimi olarak değiştirin.</b></string>
     <string name="update_delay">Milisaniye cinsinden Arayüz güncelleme gecikmesi</string>
+    <string name="invalid_update_delay">10 ile 10000 milisaniye arasında bir değer girin.</string>
     <string name="select_picture">Görsel ekle</string>
     <string name="select_txt">Dosya seç</string>
     <string name="key_success">Anahtar başarıyla içe aktarıldı</string>

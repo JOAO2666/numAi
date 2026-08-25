@@ -217,6 +217,8 @@ public class SettingsActivity extends Activity {
         findViewById(R.id.ok).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                final int selectedUpdateDelay = readUpdateDelay();
+                if (selectedUpdateDelay < 0) return;
                 saveGeminiImageSettings();
                 final String urlByName = ApiManager.getUrlByName(apiSpinner.getSelectedItem().toString());
                 final String selectedProviderId = ApiManager.getIdByUrl(urlByName);
@@ -230,7 +232,7 @@ public class SettingsActivity extends Activity {
                             lastThinkModel == null ? "" : lastThinkModel,
                             shrinkThink.isChecked(),
                             systemPrompt,
-                            Integer.parseInt(updateDelay.getText().toString()),
+                            selectedUpdateDelay,
                             webSearch.isChecked(),
                             searchEngineSpinner.getSelectedItem().toString().toLowerCase(),
                             webFetch.isChecked(),
@@ -258,7 +260,7 @@ public class SettingsActivity extends Activity {
                                     thinkingModel,
                                     shrinkThink.isChecked(),
                                     systemPrompt,
-                                    Integer.parseInt(updateDelay.getText().toString()),
+                                    selectedUpdateDelay,
                                     webSearch.isChecked(),
                                     searchEngineSpinner.getSelectedItem().toString().toLowerCase(),
                                     webFetch.isChecked(),
@@ -537,6 +539,19 @@ public class SettingsActivity extends Activity {
         }
         if (geminiImageModel != null) {
             config.updateGeminiImageModel(geminiImageModel.getText().toString());
+        }
+    }
+
+    private int readUpdateDelay() {
+        try {
+            int value = Integer.parseInt(updateDelay.getText().toString().trim());
+            if (value < 10 || value > 10000) throw new NumberFormatException();
+            return value;
+        } catch (Exception ignored) {
+            Toast.makeText(context, R.string.invalid_update_delay,
+                    Toast.LENGTH_SHORT).show();
+            updateDelay.requestFocus();
+            return -1;
         }
     }
 

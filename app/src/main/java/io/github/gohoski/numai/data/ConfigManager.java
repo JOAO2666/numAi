@@ -98,11 +98,13 @@ public class ConfigManager {
     }
 
     private Config loadConfig(ProviderSettings provider) {
+        int storedUpdateDelay = preferences.getInt(KEY_UPDATE_DELAY, 250);
+        if (storedUpdateDelay < 10 || storedUpdateDelay > 10000) storedUpdateDelay = 250;
         return new Config(provider.getBaseUrl(), provider.getApiKey(),
                 provider.getChatModel(), provider.getThinkingModel(),
                 preferences.getBoolean(KEY_SHRINK_THINK, false),
                 preferences.getString(KEY_SYSTEM_PROMPT, ""),
-                preferences.getInt(KEY_UPDATE_DELAY, 250),
+                storedUpdateDelay,
                 preferences.getBoolean(KEY_WEB_SEARCH_ENABLED, true),
                 preferences.getString(KEY_SEARCH_ENGINE, "bing"),
                 preferences.getBoolean(KEY_WEB_FETCH_ENABLED,
@@ -162,6 +164,7 @@ public class ConfigManager {
             if (baseUrl != null && baseUrl.length() > 0) {
                 activeProvider.setBaseUrl(baseUrl);
                 config.setBaseUrl(baseUrl);
+                saveConfig();
             }
             return;
         }
@@ -187,7 +190,7 @@ public class ConfigManager {
     }
 
     public synchronized void updateApiKey(String apiKey) {
-        config.setApiKey(apiKey == null ? "" : apiKey);
+        config.setApiKey(apiKey);
         saveConfig();
     }
 

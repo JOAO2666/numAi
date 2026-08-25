@@ -35,6 +35,7 @@
     <string name="fail_send">Failed to send message:\n%s</string>
     <string name="fail_send_vision">Failed to send message:\n%s\n\n<b>For image perception support, change the model to Gemma, Gemini, Qwen, GPT, or Kimi.</b></string>
     <string name="update_delay">UI update delay in milliseconds</string>
+    <string name="invalid_update_delay">Enter a delay between 10 and 10000 milliseconds.</string>
     <string name="select_picture">Attach an image</string>
     <string name="select_txt">Select file</string>
     <string name="key_success">Key successfully imported</string>

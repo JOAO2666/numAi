@@ -58,4 +58,5 @@ public class ModelCatalogTest {
                 "\\vec{v} = (7,60\\hat{i} + 6,10\\hat{j})\\text{ m/s}, \\theta_0 = 45^\\circ");
         assertEquals("v⃗ = (7,60î + 6,10ĵ) m/s, θ₀ = 45°", formatted);
     }
+
 }

@@ -133,7 +133,8 @@ public class MainActivity extends Activity {
 
         if (savedInstanceState == null) {
             ChatManager.getInstance().loadChats(this);
-            ChatManager.getInstance().startNewChat();
+            // Keep the process-local current chat when returning from Settings
+            // or another Activity; the Chats menu is the explicit new-chat action.
         }
 
         apiService = new ApiService(this);
@@ -181,6 +182,7 @@ public class MainActivity extends Activity {
         msgList.setAdapter(adapter);
         scrollToBottom();
         updateEmptyState();
+        resumeGenerationForCurrentChat();
 
         if (config.getConfig().getShrinkThink()) {
             LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) thinkingToggle.getLayoutParams();
@@ -417,15 +419,17 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this)
                 .setTitle(R.string.delete_chat_title)
                 .setMessage(getString(R.string.delete_chat_message, chat.getTitle()))
-                .setPositiveButton(R.string.delete, new DialogInterface.OnClickListener() {
+                    .setPositiveButton(R.string.delete, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        if (activeChatId != null && activeChatId.equals(chat.getId()) &&
-                                activeChatGenerationId != null) {
+                        String generationId = ChatProcessingService.getActiveGenerationId(chat.getId());
+                        if (generationId != null) {
                             ChatProcessingService.cancelGeneration(MainActivity.this,
-                                    activeChatId, activeChatGenerationId);
-                            activeChatId = null;
-                            activeChatGenerationId = null;
+                                    chat.getId(), generationId);
+                            if (chat.getId().equals(activeChatId)) {
+                                activeChatId = null;
+                                activeChatGenerationId = null;
+                            }
                         }
                         ChatManager.getInstance().deleteChat(MainActivity.this, chat);
                         refreshMessageAdapter();
@@ -440,11 +444,43 @@ public class MainActivity extends Activity {
         // generations remain owned by ChatProcessingService.
         isGenerating = false;
         isCancelled = false;
+        activeChatId = null;
+        activeChatGenerationId = null;
         autoScroll = true;
         adapter = new MessageAdapter(this, MessageManager.getInstance().getMessages());
         msgList.setAdapter(adapter);
         scrollToBottom();
         updateEmptyState();
+        resumeGenerationForCurrentChat();
+    }
+
+    private void resumeGenerationForCurrentChat() {
+        if (sendBtn == null || input == null || attachBtn == null || progressBar == null) return;
+        Chat current = ChatManager.getInstance().getCurrentChat();
+        if (current == null || current.getId() == null) return;
+        if (activeChatGenerationId != null && current.getId().equals(activeChatId) &&
+                ChatProcessingService.isGenerationActive(current.getId(), activeChatGenerationId)) {
+            return;
+        }
+
+        String generationId = ChatProcessingService.getActiveGenerationId(current.getId());
+        if (generationId == null) {
+            if (current.getId().equals(activeChatId)) {
+                activeChatId = null;
+                activeChatGenerationId = null;
+            }
+            return;
+        }
+
+        activeChatId = current.getId();
+        activeChatGenerationId = generationId;
+        isGenerating = true;
+        isCancelled = false;
+        sendBtn.setImageResource(R.drawable.ic_action_stop);
+        input.setEnabled(false);
+        attachBtn.setEnabled(false);
+        progressBar.setVisibility(View.VISIBLE);
+        observeGeneration(current, generationId);
     }
 
     private void updateEmptyState() {
@@ -461,6 +497,18 @@ public class MainActivity extends Activity {
                 processSelectedImage(data.getData());
             }
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        resumeGenerationForCurrentChat();
+    }
+
+    @Override
+    protected void onDestroy() {
+        generationHandler.removeCallbacksAndMessages(null);
+        super.onDestroy();
     }
 
     private boolean processSelectedImages(Intent data) {

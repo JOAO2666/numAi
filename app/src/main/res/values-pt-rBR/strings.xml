@@ -36,6 +36,7 @@
     <string name="fail_send">Falha ao enviar a mensagem:\n%s</string>
     <string name="fail_send_vision">Falha ao enviar a mensagem:\n%s\n\n&lt;b&gt;Para suporte a imagens, mude o modelo para Gemma, Gemini, Qwen, GPT ou Kimi.&lt;/b&gt;</string>
     <string name="update_delay">Intervalo de atualização da interface em milissegundos</string>
+    <string name="invalid_update_delay">Informe um intervalo entre 10 e 10000 milissegundos.</string>
     <string name="select_picture">Anexar uma imagem</string>
     <string name="select_txt">Selecionar arquivo</string>
     <string name="key_success">Chave importada com sucesso</string>

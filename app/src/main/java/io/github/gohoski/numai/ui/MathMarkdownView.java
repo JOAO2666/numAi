@@ -16,6 +16,8 @@ public class MathMarkdownView extends WebView {
             "https://cdn.jsdelivr.net/npm/mathjax@3/es5/";
     private String lastMarkdown = null;
     private int lastHeight = -1;
+    private boolean renderFailed;
+    private RenderErrorListener renderErrorListener;
 
     public MathMarkdownView(Context context) {
         super(context);
@@ -54,6 +56,29 @@ public class MathMarkdownView extends WebView {
         setWebViewClient(new WebViewClient());
     }
 
+    public interface RenderErrorListener {
+        void onRenderError();
+    }
+
+    public void setRenderErrorListener(RenderErrorListener listener) {
+        renderErrorListener = listener;
+    }
+
+    public String getMarkdown() { return lastMarkdown; }
+
+    private void notifyRenderError() {
+        renderFailed = true;
+        final RenderErrorListener listener = renderErrorListener;
+        if (listener != null) {
+            post(new Runnable() {
+                @Override
+                public void run() {
+                    if (listener == renderErrorListener) listener.onRenderError();
+                }
+            });
+        }
+    }
+
     public static boolean canRender(String markdown) {
         if (markdown == null || markdown.length() == 0) return false;
         if (hasPaired(markdown, "$$", "$$", 2)) return true;
@@ -75,9 +100,10 @@ public class MathMarkdownView extends WebView {
 
     public void setMarkdown(String markdown) {
         String safeMarkdown = markdown == null ? "" : markdown;
-        if (safeMarkdown.equals(lastMarkdown)) return;
+        if (safeMarkdown.equals(lastMarkdown) && !renderFailed) return;
         lastMarkdown = safeMarkdown;
         lastHeight = -1;
+        renderFailed = false;
         loadDataWithBaseURL(MATHJAX_BASE_URL, buildDocument(safeMarkdown),
                 "text/html", "UTF-8", null);
     }
@@ -111,6 +137,11 @@ public class MathMarkdownView extends WebView {
         public void setHeight(int height) {
             if (view != null) view.updateHeight(height);
         }
+
+        @JavascriptInterface
+        public void onRenderError() {
+            if (view != null) view.notifyRenderError();
+        }
     }
 
     private static String buildDocument(String markdown) {
@@ -127,7 +158,7 @@ public class MathMarkdownView extends WebView {
         appendMarkdown(html, markdown);
         html.append("<script>");
         html.append("function reportHeight(){var h=Math.ceil(document.body.scrollHeight*(window.devicePixelRatio||1));if(window.NumAiMath){window.NumAiMath.setHeight(h);}};");
-        html.append("function renderMathJax(){if(window.MathJax&&window.MathJax.typesetPromise){window.MathJax.typesetPromise().then(function(){reportHeight();setTimeout(reportHeight,120);}).catch(function(){reportHeight();});}else{reportHeight();setTimeout(renderMathJax,120);}};");
+        html.append("var mathJaxAttempts=0;function renderMathJax(){if(window.MathJax&&window.MathJax.typesetPromise){window.MathJax.typesetPromise().then(function(){reportHeight();setTimeout(reportHeight,120);}).catch(function(){reportHeight();if(window.NumAiMath){window.NumAiMath.onRenderError();}});}else{reportHeight();if(++mathJaxAttempts<30){setTimeout(renderMathJax,120);}else if(window.NumAiMath){window.NumAiMath.onRenderError();}}};");
         html.append("if(window.addEventListener){window.addEventListener('load',renderMathJax,false);}else{window.onload=renderMathJax;}");
         html.append("</script></body></html>");
         return html.toString();

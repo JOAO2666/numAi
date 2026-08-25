@@ -215,6 +215,7 @@ public class ChatManager {
     }
 
     public void loadChats(Context context) {
+        String previousCurrentId = currentChat == null ? null : currentChat.getId();
         chats.clear();
         try {
             FileInputStream fis = context.openFileInput(INDEX_FILE);
@@ -246,6 +247,12 @@ public class ChatManager {
             }
         } catch (Exception ignored) {
         }
+
+        if (previousCurrentId != null) {
+            Chat restored = getChatById(previousCurrentId);
+            if (restored != null) currentChat = restored;
+        }
+        if (currentChat == null) startNewChat();
     }
 
     private void loadMessages(Context context, Chat chat) {

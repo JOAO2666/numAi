@@ -27,6 +27,16 @@ public class GenerationRegistry {
         return generation != null && !generation.isCancelled();
     }
 
+    public synchronized String getActiveGenerationId(String chatId) {
+        if (chatId == null) return null;
+        for (Generation generation : generations.values()) {
+            if (chatId.equals(generation.getChatId()) && !generation.isCancelled()) {
+                return generation.getGenerationId();
+            }
+        }
+        return null;
+    }
+
     public synchronized boolean cancel(String chatId, String generationId) {
         Generation generation = generations.get(key(chatId, generationId));
         if (generation == null) return false;
@@ -44,6 +54,13 @@ public class GenerationRegistry {
             if (!generation.isCancelled()) count++;
         }
         return count;
+    }
+
+    public synchronized void cancelAll() {
+        for (Generation generation : generations.values()) {
+            generation.cancel();
+        }
+        generations.clear();
     }
 
     private String key(String chatId, String generationId) {
