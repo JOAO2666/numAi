@@ -13,6 +13,7 @@ public class ApiRequest {
     private Map<String, String> params;
     private String body;
     private String baseUrl;
+    private String apiKey;
     private int readTimeout = 15000;
 
     public ApiRequest(String endpoint, String method) {
@@ -22,6 +23,7 @@ public class ApiRequest {
         this.params = new LinkedHashMap<String, String>();
         this.body = "";
         this.baseUrl = null;
+        this.apiKey = null;
     }
 
     public ApiRequest(String baseUrl, String endpoint, String method) {
@@ -29,7 +31,9 @@ public class ApiRequest {
         this.method = method;
         this.headers = new HashMap<String, String>();
         this.params = new LinkedHashMap<String, String>();
+        this.body = "";
         this.baseUrl = baseUrl;
+        this.apiKey = null;
     }
 
     public ApiRequest addHeader(String key, String value) {
@@ -50,6 +54,10 @@ public class ApiRequest {
 
     public void setReadTimeout(int readTimeout) {
         this.readTimeout = readTimeout;
+    }
+
+    public void setApiKey(String apiKey) {
+        this.apiKey = apiKey;
     }
 
     public int getReadTimeout() { return readTimeout; }
@@ -78,4 +86,5 @@ public class ApiRequest {
     public Map<String, String> getParams() { return params; }
     public String getBody() { return body; }
     public String getBaseUrl() { return baseUrl; }
+    public String getApiKey() { return apiKey; }
 }

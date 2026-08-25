@@ -1,7 +1,6 @@
 package io.github.gohoski.numai.api;
 
 import android.content.Context;
-import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -33,12 +32,12 @@ public class ApiClient {
 
         try {
             String baseUrl = request.getBaseUrl();
-            String apiKey = null;
+            String apiKey = request.getApiKey();
 
             if (baseUrl == null && context != null) {
                 Config config = ConfigManager.getInstance(context).getConfig();
                 baseUrl = config.getBaseUrl();
-                apiKey = config.getApiKey();
+                if (apiKey == null) apiKey = config.getApiKey();
             }
 
             if (baseUrl == null) {
@@ -50,7 +49,6 @@ public class ApiClient {
             int redirectCount = 0;
 
             while (redirectCount < 5) {
-                Log.d("ApiClient", fullUrl);
                 URL url = new URL(fullUrl);
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setInstanceFollowRedirects(false); // Manual redirect handling to preserve Set-Cookie

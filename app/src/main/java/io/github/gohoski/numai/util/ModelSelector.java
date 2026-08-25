@@ -20,8 +20,6 @@ public class ModelSelector {
     }
 
     private static String selectPreferredModel(List<String> availableModels, List<String> prefModels) {
-        System.out.println(availableModels);
-
         if (availableModels == null || availableModels.size() == 0) {
             return null;
         }

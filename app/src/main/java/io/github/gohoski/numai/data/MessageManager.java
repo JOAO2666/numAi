@@ -18,7 +18,11 @@ public class MessageManager {
     }
 
     public void addMessage(Message message) {
-        ChatManager.getInstance().getCurrentChat().getMessages().add(message);
+        io.github.gohoski.numai.model.Chat chat = ChatManager.getInstance().getCurrentChat();
+        if (message != null) {
+            message.setChatId(chat.getId());
+            chat.getMessages().add(message);
+        }
     }
 
     public List<Message> getMessages() {

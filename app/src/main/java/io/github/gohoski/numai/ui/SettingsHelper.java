@@ -52,7 +52,6 @@ public class SettingsHelper {
             @Override
             public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
                 String selected = adapterView.getItemAtPosition(i).toString();
-                System.out.println(selected);
                 if (selected.equals(context.getString(R.string.other))) {
                     showCustomUrlDialog(context, apiNames, adapter, spinner, callback);
                 } else if (callback != null) {

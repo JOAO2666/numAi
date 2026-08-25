@@ -11,6 +11,7 @@ import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.Looper;
 import android.text.ClipboardManager;
 import android.text.SpannableStringBuilder;
@@ -44,7 +45,10 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import cc.nnproject.json.JSON;
 import cc.nnproject.json.JSONArray;
@@ -54,6 +58,9 @@ import io.github.gohoski.numai.api.ApiCallback;
 import io.github.gohoski.numai.api.ApiError;
 import io.github.gohoski.numai.api.ApiResult;
 import io.github.gohoski.numai.api.ApiService;
+import io.github.gohoski.numai.api.GeminiImageResult;
+import io.github.gohoski.numai.api.GeminiImageService;
+import io.github.gohoski.numai.model.ProviderSnapshot;
 import io.github.gohoski.numai.data.ChatManager;
 import io.github.gohoski.numai.data.ConfigManager;
 import io.github.gohoski.numai.data.MessageManager;
@@ -65,12 +72,14 @@ import io.github.gohoski.numai.search.SearchManager;
 import io.github.gohoski.numai.search.SearchResult;
 import io.github.gohoski.numai.search.WebFetcher;
 import io.github.gohoski.numai.ui.MessageAdapter;
+import io.github.gohoski.numai.util.Base64;
 import io.github.gohoski.numai.util.SSLDisabler;
 
 public class MainActivity extends Activity {
     private static final int REQUEST_CODE_PICK_IMAGE = 1;
 
     private ApiService apiService;
+    private GeminiImageService geminiImageService;
     private ConfigManager config;
 
     private ListView msgList;
@@ -79,6 +88,7 @@ public class MainActivity extends Activity {
     private MessageAdapter adapter;
     private ImageButton sendBtn;
     private ToggleButton thinkingToggle;
+    private ToggleButton imageToggle;
     private ProgressBar progressBar;
     private TextView imgCount;
     private boolean autoScroll = true;
@@ -87,6 +97,10 @@ public class MainActivity extends Activity {
     private InputStream currentStream;
     private volatile boolean isCancelled = false;
     private volatile int currentGenerationId = 0;
+    private String activeChatId;
+    private String activeChatGenerationId;
+    private final Handler generationHandler = new Handler();
+    private final Map<String, Integer> imageGenerationIds = new HashMap<String, Integer>();
     int UPDATE_DELAY_MS = 250;
 
     private ImageButton attachBtn;
@@ -123,12 +137,14 @@ public class MainActivity extends Activity {
         }
 
         apiService = new ApiService(this);
+        geminiImageService = new GeminiImageService(this);
         msgList = (ListView) findViewById(R.id.messages_list);
         helloLayout = findViewById(R.id.hello_layout);
         input = (EditText) findViewById(R.id.message_input);
         sendBtn = (ImageButton) findViewById(R.id.send_button);
         attachBtn = (ImageButton) findViewById(R.id.attach_button);
         thinkingToggle = (ToggleButton) findViewById(R.id.thinking);
+        imageToggle = (ToggleButton) findViewById(R.id.image_generation);
         progressBar = (ProgressBar) findViewById(R.id.waiting);
         imgCount = (TextView) findViewById(R.id.img_count);
 
@@ -152,6 +168,14 @@ public class MainActivity extends Activity {
                 startActivityForResult(Intent.createChooser(intent, getString(R.string.select_picture)), REQUEST_CODE_PICK_IMAGE);
             }
         });
+
+        imageToggle.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                updateImageModeUi();
+            }
+        });
+        updateImageModeUi();
 
         adapter = new MessageAdapter(this, MessageManager.getInstance().getMessages());
         msgList.setAdapter(adapter);
@@ -359,7 +383,6 @@ public class MainActivity extends Activity {
                 .setItems(options, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        stopGeneration();
                         if (which == 0) {
                             ChatManager.getInstance().startNewChat();
                             refreshMessageAdapter();
@@ -379,7 +402,6 @@ public class MainActivity extends Activity {
                 .setItems(actions, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        stopGeneration();
                         if (which == 0) {
                             ChatManager.getInstance().setCurrentChat(MainActivity.this, chat);
                             refreshMessageAdapter();
@@ -398,7 +420,13 @@ public class MainActivity extends Activity {
                 .setPositiveButton(R.string.delete, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        stopGeneration();
+                        if (activeChatId != null && activeChatId.equals(chat.getId()) &&
+                                activeChatGenerationId != null) {
+                            ChatProcessingService.cancelGeneration(MainActivity.this,
+                                    activeChatId, activeChatGenerationId);
+                            activeChatId = null;
+                            activeChatGenerationId = null;
+                        }
                         ChatManager.getInstance().deleteChat(MainActivity.this, chat);
                         refreshMessageAdapter();
                     }
@@ -408,6 +436,10 @@ public class MainActivity extends Activity {
     }
 
     private void refreshMessageAdapter() {
+        // Switching chats changes only the displayed adapter; other chat
+        // generations remain owned by ChatProcessingService.
+        isGenerating = false;
+        isCancelled = false;
         autoScroll = true;
         adapter = new MessageAdapter(this, MessageManager.getInstance().getMessages());
         msgList.setAdapter(adapter);
@@ -502,6 +534,28 @@ public class MainActivity extends Activity {
     }
 
     private void stopGeneration() {
+        final Chat current = ChatManager.getInstance().getCurrentChat();
+        if (activeChatId != null && activeChatGenerationId != null &&
+                activeChatId.equals(current.getId())) {
+            ChatProcessingService.cancelGeneration(this, activeChatId,
+                    activeChatGenerationId);
+            List<Message> currentMessages = current.getMessages();
+            for (int i = currentMessages.size() - 1; i >= 0; i--) {
+                if (activeChatGenerationId.equals(
+                        currentMessages.get(i).getGenerationId())) {
+                    currentMessages.remove(i);
+                }
+            }
+            ChatManager.getInstance().onMessageAdded(this, current);
+            activeChatId = null;
+            activeChatGenerationId = null;
+            resetUIState();
+            adapter.notifyDataSetChanged();
+            updateEmptyState();
+            return;
+        }
+
+        cancelImageGeneration(current.getId());
         currentGenerationId++;
         isCancelled = true;
         if (currentStream != null) {
@@ -521,7 +575,7 @@ public class MainActivity extends Activity {
             }
         }
         resetUIState();
-        ChatManager.getInstance().onMessageAdded(this);
+        ChatManager.getInstance().onMessageAdded(this, current);
 
         runOnUiThread(new Runnable() {
             public void run() {
@@ -533,6 +587,11 @@ public class MainActivity extends Activity {
 
     private void sendMessage() {
         String text = input.getText().toString().trim();
+        final boolean generateImage = imageToggle != null && imageToggle.isChecked();
+        if (generateImage && text.length() == 0) {
+            Toast.makeText(this, R.string.gemini_image_prompt_required, Toast.LENGTH_SHORT).show();
+            return;
+        }
         if (text.length() == 0 && inputImages.isEmpty()) return;
         if (isGenerating) {
             stopGeneration();
@@ -540,7 +599,8 @@ public class MainActivity extends Activity {
         hideKeyboard();
         autoScroll = true;
         currentStream = null;
-        MessageManager.getInstance().addMessage(new Message(Role.USER, text, new ArrayList<String>(inputImages), null));
+        final List<String> selectedImages = new ArrayList<String>(inputImages);
+        MessageManager.getInstance().addMessage(new Message(Role.USER, text, selectedImages, null));
         ChatManager.getInstance().onMessageAdded(this);
         input.setText("");
         sendBtn.setImageResource(R.drawable.ic_action_stop);
@@ -552,42 +612,178 @@ public class MainActivity extends Activity {
         adapter.notifyDataSetChanged();
         updateEmptyState();
         scrollToBottom();
-        requestAICompletion();
+        if (generateImage) {
+            requestGeminiImage(text, selectedImages);
+        } else {
+            requestAICompletion();
+        }
     }
 
     private void requestAICompletion() {
-        synchronized (bufferLock) {
-            thinkBuffer.setLength(0);
-            contentBuffer.setLength(0);
+        isGenerating = true;
+        isCancelled = false;
+        final boolean thinkingEnabled = thinkingToggle.isChecked();
+        final Chat targetChat = ChatManager.getInstance().getCurrentChat();
+        final List<Message> messages = targetChat.getMessages();
+        if (messages.isEmpty()) {
+            resetUIState();
+            return;
         }
+        final Message userMessage = messages.get(messages.size() - 1);
+        activeChatId = targetChat.getId();
+        activeChatGenerationId = UUID.randomUUID().toString();
+        final ProviderSnapshot snapshot = config.createSnapshot();
+        startChatProcessingService(ChatProcessingService.createIntent(this, targetChat,
+                userMessage, snapshot, thinkingEnabled, activeChatGenerationId));
+        observeGeneration(targetChat, activeChatGenerationId);
+    }
+
+    private void startChatProcessingService(Intent intent) {
+        try {
+            if (Integer.parseInt(Build.VERSION.SDK) >= 26) {
+                Method method = Context.class.getMethod("startForegroundService", Intent.class);
+                method.invoke(this, intent);
+            } else {
+                startService(intent);
+            }
+        } catch (Exception e) {
+            startService(intent);
+        }
+    }
+
+    private void observeGeneration(final Chat targetChat, final String generationId) {
+        generationHandler.postDelayed(new Runnable() {
+            public void run() {
+                boolean active = ChatProcessingService.isGenerationActive(
+                        targetChat.getId(), generationId);
+                if (ChatManager.getInstance().getCurrentChat() == targetChat) {
+                    adapter.notifyDataSetChanged();
+                    updateEmptyState();
+                    if (autoScroll) scrollToBottom();
+                }
+                if (active) {
+                    generationHandler.postDelayed(this, 250);
+                } else if (ChatManager.getInstance().getCurrentChat() == targetChat) {
+                    if (generationId.equals(activeChatGenerationId)) {
+                        activeChatGenerationId = null;
+                        activeChatId = null;
+                        resetUIState();
+                    }
+                }
+            }
+        }, 250);
+    }
+
+    private void requestGeminiImage(final String prompt, final List<String> selectedImages) {
         isThinkingState = false;
         isGenerating = true;
         isCancelled = false;
-        final int genId = ++currentGenerationId;
-        final boolean thinkingEnabled = thinkingToggle.isChecked();
+        final Chat targetChat = ChatManager.getInstance().getCurrentChat();
+        final String targetChatId = targetChat.getId();
+        final int genId = nextImageGenerationId(targetChatId);
 
-        apiService.chatCompletion(MessageManager.getInstance().getMessages(), thinkingEnabled, new ApiCallback<ApiResult>() {
+        geminiImageService.generate(prompt, selectedImages, new ApiCallback<GeminiImageResult>() {
             @Override
-            public void onSuccess(final ApiResult apiResult) {
-                if (genId != currentGenerationId || isCancelled) return;
+            public void onSuccess(final GeminiImageResult result) {
+                if (!isImageGenerationCurrent(targetChatId, genId)) return;
                 runOnUiThread(new Runnable() {
+                    @Override
                     public void run() {
-                        if (genId != currentGenerationId || isCancelled) return;
-                        startResponseStream(genId, apiResult.getResult(), apiResult.getModel(), thinkingEnabled);
+                        if (!isImageGenerationCurrent(targetChatId, genId)) return;
+                        saveGeminiImageResult(result, targetChat);
                     }
                 });
             }
+
             @Override
             public void onError(final ApiError error) {
-                if (genId != currentGenerationId || isCancelled) return;
+                if (!isImageGenerationCurrent(targetChatId, genId)) return;
                 runOnUiThread(new Runnable() {
+                    @Override
                     public void run() {
-                        if (genId != currentGenerationId || isCancelled) return;
-                        handleStreamError(error.getMessage());
+                        if (!isImageGenerationCurrent(targetChatId, genId)) return;
+                        handleGenerationError(error.getMessage(), targetChat);
                     }
                 });
             }
         });
+    }
+
+    private synchronized int nextImageGenerationId(String chatId) {
+        Integer current = imageGenerationIds.get(chatId);
+        int next = current == null ? 1 : current.intValue() + 1;
+        imageGenerationIds.put(chatId, Integer.valueOf(next));
+        return next;
+    }
+
+    private synchronized boolean isImageGenerationCurrent(String chatId, int generationId) {
+        Integer current = imageGenerationIds.get(chatId);
+        return current != null && current.intValue() == generationId;
+    }
+
+    private synchronized void cancelImageGeneration(String chatId) {
+        if (chatId != null) nextImageGenerationId(chatId);
+    }
+
+    private void saveGeminiImageResult(GeminiImageResult result, Chat targetChat) {
+        String mimeType = result.getMimeType();
+        boolean isPng = "image/png".equalsIgnoreCase(mimeType);
+        String fileName = "gemini_img_" + nextImageId++ + (isPng ? ".png" : ".jpg");
+        FileOutputStream fos = null;
+        boolean saved = false;
+        try {
+            byte[] bytes = Base64.decode(result.getImageData());
+            fos = openFileOutput(fileName, Context.MODE_PRIVATE);
+            fos.write(bytes);
+            fos.flush();
+            saved = bytes.length > 0;
+        } catch (Exception e) {
+            Log.e("GeminiImage", "Could not save generated image", e);
+        } finally {
+            if (fos != null) {
+                try { fos.close(); } catch (IOException ignored) {}
+            }
+        }
+
+        if (!saved) {
+            deleteFile(fileName);
+            handleGenerationError(getString(R.string.gemini_image_save_failed), targetChat);
+            return;
+        }
+
+        String description = result.getText();
+        if (description == null || description.trim().length() == 0) {
+            description = getString(R.string.gemini_image_done);
+        }
+        Message generated = new Message(Role.ASSISTANT, description, getString(R.string.gemini_image_model_label));
+        generated.setOutputImage(fileName);
+        generated.setChatId(targetChat.getId());
+        targetChat.getMessages().add(generated);
+        ChatManager.getInstance().onMessageAdded(this, targetChat);
+        if (ChatManager.getInstance().getCurrentChat() == targetChat) resetUIState();
+    }
+
+    private void handleGenerationError(String message, Chat targetChat) {
+        Message error = new Message(Role.ASSISTANT, message, getString(R.string.error));
+        error.setAsError();
+        error.setChatId(targetChat.getId());
+        targetChat.getMessages().add(error);
+        ChatManager.getInstance().onMessageAdded(this, targetChat);
+        if (ChatManager.getInstance().getCurrentChat() == targetChat) {
+            resetUIState();
+            adapter.notifyDataSetChanged();
+            updateEmptyState();
+        }
+    }
+
+    private void updateImageModeUi() {
+        if (imageToggle == null || thinkingToggle == null || input == null) return;
+        boolean generatingImage = imageToggle.isChecked();
+        if (generatingImage) {
+            thinkingToggle.setChecked(false);
+        }
+        thinkingToggle.setEnabled(!generatingImage);
+        input.setHint(generatingImage ? R.string.gemini_image_prompt_hint : R.string.ask_anything);
     }
 
     private void startResponseStream(final int genId, final InputStream stream, String model, final boolean thinkingEnabled) {

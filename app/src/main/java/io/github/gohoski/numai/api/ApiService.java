@@ -16,6 +16,8 @@ import cc.nnproject.json.JSONObject;
 import io.github.gohoski.numai.R;
 import io.github.gohoski.numai.data.ConfigManager;
 import io.github.gohoski.numai.model.Message;
+import io.github.gohoski.numai.model.ModelInfo;
+import io.github.gohoski.numai.model.ProviderSnapshot;
 import io.github.gohoski.numai.model.Role;
 import io.github.gohoski.numai.util.Base64;
 
@@ -32,27 +34,41 @@ public class ApiService {
     }
 
     public void chatCompletion(final List<Message> msg, final boolean thinking, final ApiCallback<ApiResult> callback) {
+        chatCompletion(msg, thinking, config.createSnapshot(), callback);
+    }
+
+    /**
+     * Uses only the immutable snapshot captured when the message was sent.
+     * Changing Settings while this request is streaming cannot redirect it.
+     */
+    public void chatCompletion(final List<Message> msg, final boolean thinking,
+            final ProviderSnapshot snapshot, final ApiCallback<ApiResult> callback) {
+        final ProviderSnapshot requestSnapshot = snapshot == null ?
+                config.createSnapshot() : snapshot;
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    ApiRequest request = new ApiRequest("/chat/completions", "POST");
+                    ApiRequest request = new ApiRequest(requestSnapshot.getBaseUrl(),
+                            "/chat/completions", "POST");
+                    request.setApiKey(requestSnapshot.getApiKey());
                     request.setReadTimeout(40000);
                     boolean[] hasImgHolder = new boolean[]{false};
-                    JSONArray messages = buildMessages(msg, hasImgHolder);
+                    JSONArray messages = buildMessages(msg, hasImgHolder, requestSnapshot);
                     boolean hasImg = hasImgHolder[0];
 
                     JSONObject body = new JSONObject();
-                    final String model = thinking ? config.getConfig().getThinkingModel() : config.getConfig().getChatModel();
+                    final String model = thinking ? requestSnapshot.getThinkingModel() :
+                            requestSnapshot.getChatModel();
                     body.put("model", model);
                     body.put("messages", messages);
                     body.put("stream", true);
 
-                    if (!(hasImg && config.getConfig().isDisableToolsWithImage()) &&
-                            (config.getConfig().isWebSearchEnabled() || config.getConfig().isWebFetchEnabled())) {
+                    if (!(hasImg && requestSnapshot.isDisableToolsWithImage()) &&
+                            (requestSnapshot.isWebSearchEnabled() || requestSnapshot.isWebFetchEnabled())) {
                         JSONArray tools = new JSONArray();
 
-                        if (config.getConfig().isWebSearchEnabled()) {
+                        if (requestSnapshot.isWebSearchEnabled()) {
                             JSONObject tool = new JSONObject();
                             tool.put("type", "function");
 
@@ -79,7 +95,7 @@ public class ApiService {
                             tools.add(tool);
                         }
 
-                        if (config.getConfig().isWebFetchEnabled()) {
+                        if (requestSnapshot.isWebFetchEnabled()) {
                             JSONObject fetchTool = new JSONObject();
                             fetchTool.put("type", "function");
 
@@ -110,7 +126,7 @@ public class ApiService {
                     }
 
                     if (thinking) {
-                        switch (config.getConfig().getBaseUrl()) {
+                        switch (requestSnapshot.getBaseUrl()) {
                             case "https://openrouter.ai/api/v1":
                                 JSONObject reasoning = new JSONObject();
                                 reasoning.put("enabled", true);
@@ -140,7 +156,10 @@ public class ApiService {
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
-                        deliverError(callback, new ApiError(ctx.getString(hasImg ? R.string.fail_send_vision : R.string.fail_send, response.getStatusCode() + " " + errorBody)));
+                        deliverError(callback, new ApiError(ctx.getString(
+                                hasImg ? R.string.fail_send_vision : R.string.fail_send,
+                                response.getStatusCode() + " " +
+                                        safeError(errorBody, requestSnapshot.getApiKey()))));
                     }
                 } catch (ApiError e) {
                     deliverError(callback, e);
@@ -149,15 +168,17 @@ public class ApiService {
         }).start();
     }
 
-    private JSONArray buildMessages(List<Message> rawMessages, boolean[] hasImgHolder) {
+    private JSONArray buildMessages(List<Message> rawMessages, boolean[] hasImgHolder,
+            ProviderSnapshot snapshot) {
         JSONArray messages = new JSONArray();
-        String systemStr = config.getConfig().getSystemPrompt();
-        if (systemStr != null && systemStr.trim().length() != 0) {
-            JSONObject system = new JSONObject();
-            system.put("role", "system");
-            system.put("content", systemStr);
-            messages.add(system);
-        }
+        String systemStr = snapshot.getSystemPrompt();
+        String latexInstruction = ctx.getString(R.string.latex_system_instruction);
+        if (systemStr == null || systemStr.trim().length() == 0) systemStr = latexInstruction;
+        else systemStr = systemStr.trim() + "\n\n" + latexInstruction;
+        JSONObject system = new JSONObject();
+        system.put("role", "system");
+        system.put("content", systemStr);
+        messages.add(system);
 
         int size = rawMessages.size();
         for (int i = 0; i < size; i++) {
@@ -265,26 +286,46 @@ public class ApiService {
     }
 
     public void getModels(final ApiCallback<ArrayList<String>> callback) {
+        getModelInfos(new ApiCallback<ArrayList<ModelInfo>>() {
+            @Override
+            public void onSuccess(ArrayList<ModelInfo> infos) {
+                ArrayList<String> ids = new ArrayList<String>();
+                for (int i = 0; i < infos.size(); i++) ids.add(infos.get(i).getId());
+                callback.onSuccess(ids);
+            }
+
+            @Override
+            public void onError(ApiError error) {
+                callback.onError(error);
+            }
+        });
+    }
+
+    public void getModelInfos(final ApiCallback<ArrayList<ModelInfo>> callback) {
+        final ProviderSnapshot requestSnapshot = config.createSnapshot();
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    ApiRequest request = new ApiRequest("/models", "GET");
+                    ApiRequest request = new ApiRequest(requestSnapshot.getBaseUrl(), "/models", "GET");
+                    request.setApiKey(requestSnapshot.getApiKey());
                     String response = apiClient.executeAsString(request);
-                    ArrayList<String> models = new ArrayList<String>();
+                    ArrayList<ModelInfo> models = new ArrayList<ModelInfo>();
 
                     JSONObject resp = JSON.getObject(response);
                     if (resp.has("error"))
-                        deliverError(callback, new ApiError(resp.getObject("error").getString("message")));
+                        deliverError(callback, new ApiError(safeError(
+                                resp.getObject("error").getString("message"),
+                                requestSnapshot.getApiKey())));
                     else {
                         JSONArray json = resp.getArray("data");
                         for (int i = 0; i < json.size(); i++) {
                             JSONObject model = json.getObject(i);
                             if (model.has("endpoints")) {
                                 if (model.getArray("endpoints").has("/v1/chat/completions"))
-                                    models.add(json.getObject(i).getString("id"));
+                                    models.add(toModelInfo(model));
                             } else
-                                models.add(json.getObject(i).getString("id"));
+                                models.add(toModelInfo(model));
                         }
                         deliverSuccess(callback, models);
                     }
@@ -293,6 +334,17 @@ public class ApiService {
                 }
             }
         }).start();
+    }
+
+    private ModelInfo toModelInfo(JSONObject model) {
+        JSONObject pricing = model.getNullableObject("pricing");
+        return new ModelInfo(model.getNullableString("id"),
+                price(pricing, "prompt"), price(pricing, "completion"),
+                price(pricing, "input"), price(pricing, "output"));
+    }
+
+    private String price(JSONObject pricing, String name) {
+        return pricing == null ? null : pricing.getNullableString(name);
     }
 
     private <T> void deliverSuccess(final ApiCallback<T> callback, final T result) {
@@ -308,10 +360,19 @@ public class ApiService {
         mainHandler.post(new Runnable() {
             @Override
             public void run() {
-                error.printStackTrace();
                 callback.onError(error);
             }
         });
+    }
+
+    private String safeError(String value, String apiKey) {
+        if (value == null) return "Unknown provider error";
+        String safe = value;
+        if (apiKey != null && apiKey.length() > 0) {
+            safe = safe.replace(apiKey, "[redacted]");
+        }
+        if (safe.length() > 800) safe = safe.substring(0, 800) + "…";
+        return safe;
     }
 
     public static String getBase64FromFilename(Context context, String fileName) {

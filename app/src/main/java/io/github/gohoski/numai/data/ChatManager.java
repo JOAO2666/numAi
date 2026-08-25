@@ -43,12 +43,26 @@ public class ChatManager {
         return currentChat;
     }
 
+    public synchronized Chat getChatById(String chatId) {
+        if (chatId == null) return null;
+        for (int i = 0; i < chats.size(); i++) {
+            if (chatId.equals(chats.get(i).getId())) return chats.get(i);
+        }
+        return null;
+    }
+
     public void startNewChat() {
         currentChat = new Chat(UUID.randomUUID().toString(), "", System.currentTimeMillis());
     }
 
     public void setCurrentChat(Context context, Chat chat) {
         this.currentChat = chat;
+        if (chat != null && chat.getId() != null && chat.getMessages().size() == 0) {
+            loadMessages(context, chat);
+        }
+    }
+
+    public void ensureMessagesLoaded(Context context, Chat chat) {
         if (chat != null && chat.getId() != null && chat.getMessages().size() == 0) {
             loadMessages(context, chat);
         }
@@ -68,23 +82,27 @@ public class ChatManager {
     }
 
     public void onMessageAdded(Context context) {
-        if (currentChat == null) return;
+        onMessageAdded(context, currentChat);
+    }
 
-        if (currentChat.getTitle() == null || currentChat.getTitle().length() == 0) {
-            for (Message msg : currentChat.getMessages()) {
+    public synchronized void onMessageAdded(Context context, Chat targetChat) {
+        if (targetChat == null) return;
+
+        if (targetChat.getTitle() == null || targetChat.getTitle().length() == 0) {
+            for (Message msg : targetChat.getMessages()) {
                 if (msg.isSent() && msg.getContent() != null && msg.getContent().trim().length() > 0) {
-                    currentChat.setTitle(generateTitle(msg.getContent()));
+                    targetChat.setTitle(generateTitle(msg.getContent()));
                     break;
                 }
             }
         }
 
-        if (!chats.contains(currentChat) && currentChat.getMessages().size() > 0) {
-            chats.add(currentChat);
+        if (!chats.contains(targetChat) && targetChat.getMessages().size() > 0) {
+            chats.add(targetChat);
         }
 
-        currentChat.setUpdatedAt(System.currentTimeMillis());
-        saveChat(context, currentChat);
+        targetChat.setUpdatedAt(System.currentTimeMillis());
+        saveChat(context, targetChat);
         saveChats(context);
     }
 
@@ -104,6 +122,10 @@ public class ChatManager {
                             context.deleteFile(fileName);
                         }
                     }
+                }
+                String generatedImage = msg.getOutputImage();
+                if (generatedImage != null && !generatedImage.startsWith("data:image")) {
+                    context.deleteFile(generatedImage);
                 }
             }
         }
@@ -131,6 +153,10 @@ public class ChatManager {
                                 }
                             }
                         }
+                        String generatedImage = msg.getOutputImage();
+                        if (generatedImage != null && !generatedImage.startsWith("data:image")) {
+                            referencedFiles.add(generatedImage);
+                        }
                     }
                 }
 
@@ -138,7 +164,8 @@ public class ChatManager {
                 String[] files = ctx.fileList();
                 if (files != null) {
                     for (String file : files) {
-                        if (file.startsWith("img_") && file.endsWith(".jpg")) {
+                        if ((file.startsWith("img_") || file.startsWith("gemini_img_")) &&
+                                (file.endsWith(".jpg") || file.endsWith(".png"))) {
                             if (!referencedFiles.contains(file)) {
                                 ctx.deleteFile(file);
                             }
