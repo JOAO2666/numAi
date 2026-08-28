@@ -28,6 +28,7 @@ import io.github.gohoski.numai.model.Chat;
 import io.github.gohoski.numai.model.Message;
 import io.github.gohoski.numai.model.ProviderSnapshot;
 import io.github.gohoski.numai.model.Role;
+import io.github.gohoski.numai.util.OpenAiDelta;
 import io.github.gohoski.numai.search.SearchEngine;
 import io.github.gohoski.numai.search.SearchManager;
 import io.github.gohoski.numai.search.SearchResult;
@@ -59,6 +60,7 @@ public class ChatProcessingService extends Service {
     private static final String EXTRA_DISABLE_TOOLS_IMAGE = "disable_tools_image";
     private static final int NOTIFICATION_ID = 2666;
     private static final int MAX_TOOL_ROUNDS = 3;
+    private static final long STREAM_PERSIST_INTERVAL_MS = 1000L;
 
     private static final GenerationRegistry REGISTRY = new GenerationRegistry();
     private ExecutorService executor;
@@ -220,19 +222,19 @@ public class ChatProcessingService extends Service {
                     JSONObject delta = choice.getNullableObject("delta");
                     if (delta == null) continue;
                     appendToolCalls(delta, streamToolCalls);
-                    String reasoning = delta.getNullableString("reasoning");
-                    if (reasoning == null) reasoning = delta.getNullableString("reasoning_content");
+                    String reasoning = OpenAiDelta.text(delta, "reasoning");
+                    if (reasoning == null) reasoning = OpenAiDelta.text(delta, "reasoning_content");
                     if (reasoning != null && reasoning.length() > 0) {
                         hasThinking = true;
                         thinking.append(reasoning);
                     }
-                    String text = delta.getNullableString("content");
+                    String text = OpenAiDelta.text(delta, "content");
                     if (text != null) content.append(text);
                     String display = hasThinking ? "<think>" + thinking +
                             "</think>" + content : content.toString();
                     assistant.setContent(display);
                     long now = System.currentTimeMillis();
-                    if (now - lastPersistAt >= 250L) {
+                    if (now - lastPersistAt >= STREAM_PERSIST_INTERVAL_MS) {
                         Chat currentChat = chatManager.getChatById(generation.getChatId());
                         if (currentChat != null) chatManager.onMessageAdded(this, currentChat);
                         lastPersistAt = now;

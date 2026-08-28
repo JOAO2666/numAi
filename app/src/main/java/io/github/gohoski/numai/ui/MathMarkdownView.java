@@ -144,7 +144,7 @@ public class MathMarkdownView extends WebView {
         }
     }
 
-    private static String buildDocument(String markdown) {
+    static String buildDocument(String markdown) {
         StringBuilder html = new StringBuilder();
         html.append("<!DOCTYPE html><html><head>");
         html.append("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">");
@@ -153,7 +153,7 @@ public class MathMarkdownView extends WebView {
         html.append("<script async src=\"tex-chtml.js\"></script>");
         html.append("<style>");
         html.append("html,body{margin:0;padding:0;background:transparent;color:#f2f2f2;font-family:sans-serif;font-size:14px;line-height:1.38;word-wrap:break-word;}");
-        html.append(".p{margin:0 0 7px 0}.h1{font-size:1.38em;font-weight:bold;margin:5px 0 8px 0}.h2{font-size:1.24em;font-weight:bold;margin:5px 0 7px 0}.h3{font-size:1.12em;font-weight:bold;margin:4px 0 6px 0}.li{margin:0 0 3px 12px;padding-left:4px}.quote{border-left:2px solid #2b88d9;padding-left:8px;color:#d0d0d0;margin:3px 0 7px 0}.code{font-family:monospace;background:#2b2b2b;padding:1px 3px}.block-code{white-space:pre-wrap;font-family:monospace;background:#242424;padding:7px;margin:0 0 7px 0;overflow-x:auto}.MathJax{color:#f2f2f2}.MathJax_Display{overflow-x:auto;overflow-y:hidden;margin:10px 0}a{color:#64b5f6;text-decoration:none}pre{margin:0}");
+        html.append(".p{margin:0 0 7px 0}.h1{font-size:1.38em;font-weight:bold;margin:5px 0 8px 0}.h2{font-size:1.24em;font-weight:bold;margin:5px 0 7px 0}.h3{font-size:1.12em;font-weight:bold;margin:4px 0 6px 0}.li{margin:0 0 3px 12px;padding-left:4px}.quote{border-left:2px solid #2b88d9;padding-left:8px;color:#d0d0d0;margin:3px 0 7px 0}.code{font-family:monospace;background:#2b2b2b;padding:1px 3px}.block-code{white-space:pre-wrap;font-family:monospace;background:#242424;padding:7px;margin:0 0 7px 0;overflow-x:auto}.math-block{overflow-x:auto;overflow-y:hidden;padding:3px 0}.MathJax{color:#f2f2f2}.MathJax_Display,mjx-container[display=\"true\"]{overflow-x:auto;overflow-y:hidden;margin:10px 0;padding:2px 0}a{color:#64b5f6;text-decoration:none}pre{margin:0}");
         html.append("</style></head><body>");
         appendMarkdown(html, markdown);
         html.append("<script>");
@@ -166,6 +166,8 @@ public class MathMarkdownView extends WebView {
 
     private static void appendMarkdown(StringBuilder html, String markdown) {
         boolean inCodeBlock = false;
+        String displayMathEnd = null;
+        StringBuilder displayMath = new StringBuilder();
         int start = 0;
         int length = markdown.length();
         while (start <= length) {
@@ -174,6 +176,7 @@ public class MathMarkdownView extends WebView {
             String line = markdown.substring(start, end);
             if (line.endsWith("\r")) line = line.substring(0, line.length() - 1);
 
+            String trimmed = line.trim();
             if (line.trim().startsWith("```")) {
                 if (inCodeBlock) html.append("</code></pre>");
                 else html.append("<pre class=\"block-code\"><code>");
@@ -181,26 +184,66 @@ public class MathMarkdownView extends WebView {
             } else if (inCodeBlock) {
                 html.append(escapeHtml(line));
                 if (end < length) html.append("\n");
-            } else if (line.length() == 0) {
-                html.append("<div class=\"p\">&nbsp;</div>");
-            } else if (line.startsWith("### ")) {
-                html.append("<div class=\"h3\">"); appendInline(html, line.substring(4)); html.append("</div>");
-            } else if (line.startsWith("## ")) {
-                html.append("<div class=\"h2\">"); appendInline(html, line.substring(3)); html.append("</div>");
-            } else if (line.startsWith("# ")) {
-                html.append("<div class=\"h1\">"); appendInline(html, line.substring(2)); html.append("</div>");
-            } else if (line.startsWith("- ") || line.startsWith("* ")) {
-                html.append("<div class=\"li\">&bull; "); appendInline(html, line.substring(2)); html.append("</div>");
-            } else if (line.startsWith("> ")) {
-                html.append("<div class=\"quote\">"); appendInline(html, line.substring(2)); html.append("</div>");
+            } else if (displayMathEnd != null) {
+                if (trimmed.equals(displayMathEnd)) {
+                    appendDisplayMath(html, displayMath.toString());
+                    displayMath.setLength(0);
+                    displayMathEnd = null;
+                } else {
+                    if (displayMath.length() > 0) displayMath.append('\n');
+                    displayMath.append(line);
+                }
+            } else if ("$$".equals(trimmed)) {
+                displayMathEnd = "$$";
+                displayMath.setLength(0);
+            } else if ("\\[".equals(trimmed)) {
+                displayMathEnd = "\\]";
+                displayMath.setLength(0);
             } else {
-                html.append("<div class=\"p\">"); appendInline(html, line); html.append("</div>");
+                appendMarkdownLine(html, line);
             }
 
             if (end == length) break;
             start = end + 1;
         }
         if (inCodeBlock) html.append("</code></pre>");
+        if (displayMathEnd != null) appendDisplayMath(html, displayMath.toString());
+    }
+
+    private static void appendDisplayMath(StringBuilder html, String tex) {
+        html.append("<div class=\"p math-block\">\\[");
+        html.append(escapeHtml(tex));
+        html.append("\\]</div>");
+    }
+
+    private static void appendMarkdownLine(StringBuilder html, String line) {
+        if (line.length() == 0) {
+            html.append("<div class=\"p\">&nbsp;</div>");
+        } else if (line.startsWith("### ")) {
+            html.append("<div class=\"h3\">");
+            appendInline(html, line.substring(4));
+            html.append("</div>");
+        } else if (line.startsWith("## ")) {
+            html.append("<div class=\"h2\">");
+            appendInline(html, line.substring(3));
+            html.append("</div>");
+        } else if (line.startsWith("# ")) {
+            html.append("<div class=\"h1\">");
+            appendInline(html, line.substring(2));
+            html.append("</div>");
+        } else if (line.startsWith("- ") || line.startsWith("* ")) {
+            html.append("<div class=\"li\">&bull; ");
+            appendInline(html, line.substring(2));
+            html.append("</div>");
+        } else if (line.startsWith("> ")) {
+            html.append("<div class=\"quote\">");
+            appendInline(html, line.substring(2));
+            html.append("</div>");
+        } else {
+            html.append("<div class=\"p\">");
+            appendInline(html, line);
+            html.append("</div>");
+        }
     }
 
     private static void appendInline(StringBuilder html, String text) {

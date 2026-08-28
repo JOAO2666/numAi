@@ -36,7 +36,7 @@ public class ChatManager {
         return instance;
     }
 
-    public Chat getCurrentChat() {
+    public synchronized Chat getCurrentChat() {
         if (currentChat == null) {
             startNewChat();
         }
@@ -51,24 +51,24 @@ public class ChatManager {
         return null;
     }
 
-    public void startNewChat() {
+    public synchronized void startNewChat() {
         currentChat = new Chat(UUID.randomUUID().toString(), "", System.currentTimeMillis());
     }
 
-    public void setCurrentChat(Context context, Chat chat) {
+    public synchronized void setCurrentChat(Context context, Chat chat) {
         this.currentChat = chat;
         if (chat != null && chat.getId() != null && chat.getMessages().size() == 0) {
             loadMessages(context, chat);
         }
     }
 
-    public void ensureMessagesLoaded(Context context, Chat chat) {
+    public synchronized void ensureMessagesLoaded(Context context, Chat chat) {
         if (chat != null && chat.getId() != null && chat.getMessages().size() == 0) {
             loadMessages(context, chat);
         }
     }
 
-    public List<Chat> getSortedChats() {
+    public synchronized List<Chat> getSortedChats() {
         List<Chat> sorted = new ArrayList<Chat>(chats);
         Collections.sort(sorted, new Comparator<Chat>() {
             @Override
@@ -106,7 +106,7 @@ public class ChatManager {
         saveChats(context);
     }
 
-    public void deleteChat(Context context, Chat chat) {
+    public synchronized void deleteChat(Context context, Chat chat) {
         chats.remove(chat);
         if (currentChat == chat) {
             startNewChat();
@@ -176,49 +176,34 @@ public class ChatManager {
         }).start();
     }
 
-    public void saveChat(Context context, Chat chat) {
+    public synchronized void saveChat(Context context, Chat chat) {
         if (chat == null || chat.getId() == null) return;
         String finalFileName = chatFileName(chat);
-        String tempFileName = finalFileName + ".tmp";
-        FileOutputStream fos;
         try {
-            // Write to temporary file
-            fos = context.openFileOutput(tempFileName, Context.MODE_PRIVATE);
-            fos.write(chat.toJSONObject().build().getBytes("UTF-8"));
-            fos.flush();
-            fos.close();
-            // Safely replace original file only if write was 100% successful
-            java.io.File tempFile = context.getFileStreamPath(tempFileName);
-            java.io.File finalFile = context.getFileStreamPath(finalFileName);
-            if (tempFile.exists()) {
-                tempFile.renameTo(finalFile);
-            }
+            writeAtomically(context, finalFileName,
+                    chat.toJSONObject().build().getBytes("UTF-8"));
         } catch (Exception e) {
             e.printStackTrace();
-            // Delete temp file if write failed due to full disk
-            context.deleteFile(tempFileName);
         }
     }
 
-    public void saveChats(Context context) {
+    public synchronized void saveChats(Context context) {
         try {
             JSONArray array = new JSONArray();
             for (Chat c : chats) {
                 array.add(c.toIndexJSONObject());
             }
-            FileOutputStream fos = context.openFileOutput(INDEX_FILE, Context.MODE_PRIVATE);
-            fos.write(array.build().getBytes("UTF-8"));
-            fos.close();
+            writeAtomically(context, INDEX_FILE, array.build().getBytes("UTF-8"));
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    public void loadChats(Context context) {
+    public synchronized void loadChats(Context context) {
         String previousCurrentId = currentChat == null ? null : currentChat.getId();
         chats.clear();
         try {
-            FileInputStream fis = context.openFileInput(INDEX_FILE);
+            FileInputStream fis = openStoredFile(context, INDEX_FILE);
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             byte[] buffer = new byte[1024];
             int len;
@@ -257,7 +242,7 @@ public class ChatManager {
 
     private void loadMessages(Context context, Chat chat) {
         try {
-            FileInputStream fis = context.openFileInput(chatFileName(chat));
+            FileInputStream fis = openStoredFile(context, chatFileName(chat));
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             byte[] buffer = new byte[1024];
             int len;
@@ -277,6 +262,49 @@ public class ChatManager {
 
     private static String chatFileName(Chat chat) {
         return "chat_" + chat.getId() + ".json";
+    }
+
+    private static FileInputStream openStoredFile(Context context,
+            String fileName) throws Exception {
+        java.io.File target = context.getFileStreamPath(fileName);
+        java.io.File backup = context.getFileStreamPath(fileName + ".bak");
+        if (!target.exists() && backup.exists()) backup.renameTo(target);
+        if (target.exists() && backup.exists()) backup.delete();
+        return context.openFileInput(fileName);
+    }
+
+    /** Replaces a file without leaving a partially written chat after a crash. */
+    private static void writeAtomically(Context context, String fileName,
+            byte[] data) throws Exception {
+        String tempName = fileName + ".tmp";
+        String backupName = fileName + ".bak";
+        FileOutputStream output = null;
+        try {
+            output = context.openFileOutput(tempName, Context.MODE_PRIVATE);
+            output.write(data);
+            output.flush();
+        } finally {
+            if (output != null) {
+                try { output.close(); } catch (Exception ignored) {}
+            }
+        }
+
+        java.io.File temp = context.getFileStreamPath(tempName);
+        java.io.File target = context.getFileStreamPath(fileName);
+        java.io.File backup = context.getFileStreamPath(backupName);
+        if (backup.exists()) backup.delete();
+
+        boolean hadTarget = target.exists();
+        if (hadTarget && !target.renameTo(backup)) {
+            temp.delete();
+            throw new java.io.IOException("Could not protect existing " + fileName);
+        }
+        if (!temp.renameTo(target)) {
+            if (hadTarget) backup.renameTo(target);
+            temp.delete();
+            throw new java.io.IOException("Could not replace " + fileName);
+        }
+        if (backup.exists()) backup.delete();
     }
 
     private static String generateTitle(String firstUserMessage) {

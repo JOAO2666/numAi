@@ -23,6 +23,7 @@ import cc.nnproject.json.JSON;
 import cc.nnproject.json.JSONArray;
 import cc.nnproject.json.JSONException;
 import cc.nnproject.json.JSONObject;
+import io.github.gohoski.numai.ChatProcessingService;
 import io.github.gohoski.numai.R;
 import io.github.gohoski.numai.model.Message;
 import io.github.gohoski.numai.model.Role;
@@ -134,12 +135,17 @@ public class MessageAdapter extends ArrayAdapter<Message> {
 
         String thinkingRaw = message.getThinkingRaw();
         String displayRaw = message.getDisplayRaw();
+        boolean isGenerating = message.getChatId() != null &&
+                message.getGenerationId() != null &&
+                ChatProcessingService.isGenerationActive(
+                        message.getChatId(), message.getGenerationId());
 
         // Thinking Box
         if (thinkingRaw != null && thinkingRaw.length() != 0) {
             holder.thinkingLayout.setVisibility(View.VISIBLE);
             holder.thinkingProcess.setMovementMethod(LinkMovementMethod.getInstance());
-            holder.thinkingProcess.setText(message.getParsedThinkContent(context, false));
+            holder.thinkingProcess.setText(
+                    message.getParsedThinkContent(context, isGenerating));
         } else {
             holder.thinkingLayout.setVisibility(View.GONE);
         }
@@ -233,7 +239,10 @@ public class MessageAdapter extends ArrayAdapter<Message> {
 
         if (displayRaw != null && displayRaw.length() != 0) {
             holder.response.setVisibility(View.VISIBLE);
-            if (MathMarkdownView.canRender(displayRaw)) {
+            // Loading a WebView and MathJax for every streamed token is very
+            // expensive on old devices. Render the lightweight native preview
+            // while streaming, then typeset the completed response once.
+            if (!isGenerating && MathMarkdownView.canRender(displayRaw)) {
                 holder.messageText.setVisibility(View.GONE);
                 holder.mathMarkdown.setVisibility(View.VISIBLE);
                 final MathMarkdownView mathView = holder.mathMarkdown;
@@ -258,7 +267,8 @@ public class MessageAdapter extends ArrayAdapter<Message> {
                 holder.mathMarkdown.setVisibility(View.GONE);
                 holder.messageText.setVisibility(View.VISIBLE);
                 holder.messageText.setMovementMethod(LinkMovementMethod.getInstance());
-                holder.messageText.setText(message.getParsedDisplayContent(context, false));
+                holder.messageText.setText(
+                        message.getParsedDisplayContent(context, isGenerating));
             }
         } else {
             holder.mathMarkdown.setRenderErrorListener(null);

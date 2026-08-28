@@ -52,7 +52,6 @@ import java.util.UUID;
 
 import cc.nnproject.json.JSON;
 import cc.nnproject.json.JSONArray;
-import cc.nnproject.json.JSONException;
 import cc.nnproject.json.JSONObject;
 import io.github.gohoski.numai.api.ApiCallback;
 import io.github.gohoski.numai.api.ApiError;
@@ -73,6 +72,7 @@ import io.github.gohoski.numai.search.SearchResult;
 import io.github.gohoski.numai.search.WebFetcher;
 import io.github.gohoski.numai.ui.MessageAdapter;
 import io.github.gohoski.numai.util.Base64;
+import io.github.gohoski.numai.util.OpenAiDelta;
 import io.github.gohoski.numai.util.SSLDisabler;
 
 public class MainActivity extends Activity {
@@ -121,7 +121,11 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         SSLDisabler.disableSSLCertificateChecking();
-        System.setProperty("http.keepAlive", "false");
+        // Android versions before Froyo had unreliable HttpURLConnection
+        // pooling. Modern devices benefit from connection reuse.
+        if (Integer.parseInt(Build.VERSION.SDK) < 8) {
+            System.setProperty("http.keepAlive", "false");
+        }
 
         config = ConfigManager.getInstance(this);
         if (config.getConfig().getApiKey().length() == 0) {
@@ -148,6 +152,15 @@ public class MainActivity extends Activity {
         imageToggle = (ToggleButton) findViewById(R.id.image_generation);
         progressBar = (ProgressBar) findViewById(R.id.waiting);
         imgCount = (TextView) findViewById(R.id.img_count);
+        imgCount.setOnClickListener(new OnClickListener() {
+            public void onClick(View view) {
+                if (!inputImages.isEmpty()) {
+                    discardPendingImages();
+                    Toast.makeText(MainActivity.this, R.string.attachments_cleared,
+                            Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
 
         sendBtn.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
@@ -167,6 +180,15 @@ public class MainActivity extends Activity {
                 // Android 4.3+ file pickers return multiple selections through ClipData.
                 intent.putExtra("android.intent.extra.ALLOW_MULTIPLE", true);
                 startActivityForResult(Intent.createChooser(intent, getString(R.string.select_picture)), REQUEST_CODE_PICK_IMAGE);
+            }
+        });
+        attachBtn.setOnLongClickListener(new View.OnLongClickListener() {
+            public boolean onLongClick(View view) {
+                if (inputImages.isEmpty()) return false;
+                discardPendingImages();
+                Toast.makeText(MainActivity.this, R.string.attachments_cleared,
+                        Toast.LENGTH_SHORT).show();
+                return true;
             }
         });
 
@@ -249,11 +271,11 @@ public class MainActivity extends Activity {
         currentStream = null;
 
         sendBtn.setImageResource(R.drawable.ic_action_stop);
+        sendBtn.setContentDescription(getString(R.string.stop_generation));
         input.setEnabled(false);
         attachBtn.setEnabled(false);
         progressBar.setVisibility(View.VISIBLE);
-        inputImages.clear();
-        imgCount.setVisibility(View.GONE);
+        discardPendingImages();
 
         ChatManager.getInstance().onMessageAdded(this);
         refreshMessageAdapter();
@@ -447,6 +469,7 @@ public class MainActivity extends Activity {
         activeChatId = null;
         activeChatGenerationId = null;
         autoScroll = true;
+        discardPendingImages();
         adapter = new MessageAdapter(this, MessageManager.getInstance().getMessages());
         msgList.setAdapter(adapter);
         scrollToBottom();
@@ -477,6 +500,7 @@ public class MainActivity extends Activity {
         isGenerating = true;
         isCancelled = false;
         sendBtn.setImageResource(R.drawable.ic_action_stop);
+        sendBtn.setContentDescription(getString(R.string.stop_generation));
         input.setEnabled(false);
         attachBtn.setEnabled(false);
         progressBar.setVisibility(View.VISIBLE);
@@ -508,7 +532,22 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         generationHandler.removeCallbacksAndMessages(null);
+        discardPendingImages();
         super.onDestroy();
+    }
+
+    private void discardPendingImages() {
+        for (int i = 0; i < inputImages.size(); i++) {
+            String fileName = inputImages.get(i);
+            if (fileName != null && !fileName.startsWith("data:image")) {
+                deleteFile(fileName);
+            }
+        }
+        inputImages.clear();
+        if (imgCount != null) {
+            imgCount.setText("0");
+            imgCount.setVisibility(View.GONE);
+        }
     }
 
     private boolean processSelectedImages(Intent data) {
@@ -568,15 +607,8 @@ public class MainActivity extends Activity {
         if (!autoScroll) return;
         msgList.post(new Runnable() {
             public void run() {
-                msgList.post(new Runnable() {
-                    public void run() {
-                        adapter.notifyDataSetChanged();
-                        int count = adapter.getCount();
-                        if (count > 0) {
-                            msgList.setSelection(count - 1);
-                        }
-                    }
-                });
+                int count = adapter.getCount();
+                if (count > 0) msgList.setSelection(count - 1);
             }
         });
     }
@@ -652,6 +684,7 @@ public class MainActivity extends Activity {
         ChatManager.getInstance().onMessageAdded(this);
         input.setText("");
         sendBtn.setImageResource(R.drawable.ic_action_stop);
+        sendBtn.setContentDescription(getString(R.string.stop_generation));
         input.setEnabled(false);
         attachBtn.setEnabled(false);
         progressBar.setVisibility(View.VISIBLE);
@@ -710,7 +743,7 @@ public class MainActivity extends Activity {
                     if (autoScroll) scrollToBottom();
                 }
                 if (active) {
-                    generationHandler.postDelayed(this, 250);
+                    generationHandler.postDelayed(this, UPDATE_DELAY_MS);
                 } else if (ChatManager.getInstance().getCurrentChat() == targetChat) {
                     if (generationId.equals(activeChatGenerationId)) {
                         activeChatGenerationId = null;
@@ -719,7 +752,7 @@ public class MainActivity extends Activity {
                     }
                 }
             }
-        }, 250);
+        }, UPDATE_DELAY_MS);
     }
 
     private void requestGeminiImage(final String prompt, final List<String> selectedImages) {
@@ -878,6 +911,7 @@ public class MainActivity extends Activity {
         autoScroll = true;
         scrollToBottom();
         sendBtn.setImageResource(android.R.drawable.ic_menu_send);
+        sendBtn.setContentDescription(getString(R.string.send_message));
         input.setEnabled(true);
         attachBtn.setEnabled(true);
         progressBar.setVisibility(View.GONE);
@@ -936,12 +970,7 @@ public class MainActivity extends Activity {
                     }
                 }
 
-                String contentStr = null;
-                if (delta.has("content") && !delta.isNull("content")) {
-                    try {
-                        contentStr = delta.getString("content");
-                    } catch (JSONException ignored) {}
-                }
+                String contentStr = OpenAiDelta.text(delta, "content");
 
                 String reasoningStr = extractJSONReasoning(delta);
                 boolean hasUpdates = false;
@@ -1273,25 +1302,7 @@ public class MainActivity extends Activity {
     }
 
     private String extractJSONReasoning(JSONObject delta) {
-        if (delta == null) return null;
-        try {
-            return delta.getString("reasoning");
-        } catch (Exception ignored) {}
-
-        try {
-            return delta.getString("reasoning_content");
-        } catch (Exception ignored) {}
-
-        try {
-            JSONArray arr = delta.getArray("reasoning_content");
-            if (arr != null && arr.size() > 0) {
-                JSONObject obj = arr.getObject(0);
-                if (obj != null && !obj.isNull("thinking")) {
-                    return obj.getString("thinking");
-                }
-            }
-        } catch (Exception ignored) {}
-
-        return null;
+        String reasoning = OpenAiDelta.text(delta, "reasoning");
+        return reasoning == null ? OpenAiDelta.text(delta, "reasoning_content") : reasoning;
     }
 }

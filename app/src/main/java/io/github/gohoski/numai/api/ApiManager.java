@@ -18,11 +18,20 @@ public class ApiManager {
         addApi("OpenCode Zen", "opencode_zen", "https://opencode.ai/zen/v1");
         addApi("NavyAI", "navyai", "https://api.navy/v1");
         addApi("OpenRouter", "openrouter", "https://openrouter.ai/api/v1");
+        addApi("NVIDIA NIM", "nvidia_nim",
+                "https://integrate.api.nvidia.com/v1");
+        addApi("TokenRouter", "tokenrouter", "https://api.tokenrouter.com/v1");
+        addApi("Groq", "groq", "https://api.groq.com/openai/v1");
+        addApi("Together AI", "together_ai", "https://api.together.ai/v1");
+        addApi("Fireworks AI", "fireworks_ai",
+                "https://api.fireworks.ai/inference/v1");
+        addApi("DeepInfra", "deepinfra", "https://api.deepinfra.com/v1/openai");
+        addApi("Hugging Face", "hugging_face", "https://router.huggingface.co/v1");
         addApi("Google AI Studio", "google_ai_studio",
                 "https://generativelanguage.googleapis.com/v1beta/openai");
-        addApi("Z.ai", "z_ai", "http://api.z.ai/api/paas/v4");
+        addApi("Z.ai", "z_ai", "https://api.z.ai/api/paas/v4");
         addApi("BigModel (Z.ai China)", "bigmodel_zh",
-                "http://open.bigmodel.cn/api/paas/v4");
+                "https://open.bigmodel.cn/api/paas/v4");
         addApi("Kilo Gateway", "kilo_gateway", "https://api.kilo.ai/api/gateway");
     }
 
@@ -39,7 +48,7 @@ public class ApiManager {
     }
 
     public static String getNameByUrl(String url) {
-        return URL_TO_NAME.get(url);
+        return URL_TO_NAME.get(normalizeUrl(url));
     }
 
     public static String getIdByName(String name) {
@@ -48,8 +57,9 @@ public class ApiManager {
     }
 
     public static String getIdByUrl(String url) {
-        String id = URL_TO_ID.get(url);
-        return id == null ? stableCustomId(url) : id;
+        String normalized = normalizeUrl(url);
+        String id = URL_TO_ID.get(normalized);
+        return id == null ? stableCustomId(normalized) : id;
     }
 
     public static String getProviderId(String nameOrUrl) {
@@ -61,6 +71,16 @@ public class ApiManager {
     private static String stableCustomId(String url) {
         if (url == null || url.length() == 0) return "custom_empty";
         return "custom_" + Integer.toHexString(url.trim().toLowerCase().hashCode());
+    }
+
+    public static String normalizeUrl(String url) {
+        if ("http://api.z.ai/api/paas/v4".equals(url)) {
+            return "https://api.z.ai/api/paas/v4";
+        }
+        if ("http://open.bigmodel.cn/api/paas/v4".equals(url)) {
+            return "https://open.bigmodel.cn/api/paas/v4";
+        }
+        return url;
     }
 
     public static List<String> getAllApiNames() {

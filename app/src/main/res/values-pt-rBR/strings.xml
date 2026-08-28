@@ -94,4 +94,9 @@
     <string name="only_free_models">Somente modelos grátis</string>
     <string name="refresh_models">Atualizar modelos</string>
     <string name="models_load_failed">Falha ao carregar modelos de %1$s: %2$s</string>
+    <string name="attach_image">Anexar imagem</string>
+    <string name="clear_attachments">Limpar imagens anexadas</string>
+    <string name="attachments_cleared">Imagens anexadas removidas</string>
+    <string name="send_message">Enviar mensagem</string>
+    <string name="stop_generation">Parar geração</string>
 </resources>

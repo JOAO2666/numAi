@@ -93,4 +93,9 @@
     <string name="only_free_models">Only free models</string>
     <string name="refresh_models">Refresh models</string>
     <string name="models_load_failed">Failed to load models from %1$s: %2$s</string>
+    <string name="attach_image">加入圖片</string>
+    <string name="clear_attachments">清除已加入的圖片</string>
+    <string name="attachments_cleared">已清除加入的圖片</string>
+    <string name="send_message">傳送訊息</string>
+    <string name="stop_generation">停止生成</string>
 </resources>

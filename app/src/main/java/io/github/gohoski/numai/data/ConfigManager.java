@@ -44,7 +44,8 @@ public class ConfigManager {
 
     private ConfigManager(Context appContext) {
         preferences = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        String legacyUrl = preferences.getString(KEY_BASE_URL, "https://api.voidai.app/v1");
+        String legacyUrl = ApiManager.normalizeUrl(preferences.getString(
+                KEY_BASE_URL, "https://api.voidai.app/v1"));
         activeProviderId = preferences.getString(KEY_ACTIVE_PROVIDER_ID,
                 ApiManager.getIdByUrl(legacyUrl));
         activeProvider = loadProvider(activeProviderId, legacyUrl);
@@ -83,8 +84,9 @@ public class ConfigManager {
             }
             if (!known.equals(providerId)) fallbackUrl = known;
         }
-        ProviderSettings settings = new ProviderSettings(providerId, preferences.getString(
-                providerKey(providerId, "baseUrl"), fallbackUrl));
+        String storedUrl = preferences.getString(providerKey(providerId, "baseUrl"), fallbackUrl);
+        ProviderSettings settings = new ProviderSettings(providerId,
+                ApiManager.normalizeUrl(storedUrl));
         settings.setApiKey(preferences.getString(providerKey(providerId, "apiKey"),
                 migrateLegacy ? preferences.getString(KEY_API_KEY, "") : ""));
         settings.setChatModel(preferences.getString(providerKey(providerId, "chatModel"),
@@ -115,6 +117,13 @@ public class ConfigManager {
     private void saveProvider(ProviderSettings provider) {
         if (provider == null) return;
         SharedPreferences.Editor editor = preferences.edit();
+        writeProvider(editor, provider);
+        editor.putString(KEY_ACTIVE_PROVIDER_ID, activeProviderId);
+        editor.commit();
+    }
+
+    private void writeProvider(SharedPreferences.Editor editor,
+            ProviderSettings provider) {
         String id = provider.getProviderId();
         editor.putString(providerKey(id, "baseUrl"), provider.getBaseUrl());
         editor.putString(providerKey(id, "apiKey"), provider.getApiKey());
@@ -122,8 +131,6 @@ public class ConfigManager {
         editor.putString(providerKey(id, "thinkingModel"), provider.getThinkingModel());
         editor.putLong(providerKey(id, "cacheTimestamp"), provider.getCacheTimestamp());
         editor.putString(providerKey(id, "cachedModels"), encodeModels(provider.getCachedModels()));
-        editor.putString(KEY_ACTIVE_PROVIDER_ID, activeProviderId);
-        editor.commit();
     }
 
     private void saveConfig() {
@@ -131,10 +138,11 @@ public class ConfigManager {
         activeProvider.setApiKey(config.getApiKey());
         activeProvider.setChatModel(config.getChatModel());
         activeProvider.setThinkingModel(config.getThinkingModel());
-        saveProvider(activeProvider);
+        SharedPreferences.Editor editor = preferences.edit();
+        writeProvider(editor, activeProvider);
+        editor.putString(KEY_ACTIVE_PROVIDER_ID, activeProviderId);
 
         // Keep legacy keys readable for older installed builds; no request reads them.
-        SharedPreferences.Editor editor = preferences.edit();
         editor.putString(KEY_BASE_URL, config.getBaseUrl());
         editor.putString(KEY_API_KEY, config.getApiKey());
         editor.putString(KEY_CHAT_MODEL, config.getChatModel());

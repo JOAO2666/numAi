@@ -186,31 +186,21 @@ public class SettingsActivity extends Activity {
                 apiSpinner.setSelection(savedInstanceState.getInt("api_spinner_pos"));
             }
 
-            fetched = savedInstanceState.getBoolean("fetched", false);
-            if (fetched && savedInstanceState.containsKey("fetched_models")) {
-                fetchedModels = savedInstanceState.getStringArrayList("fetched_models");
-                if (fetchedModels != null) {
-                    fetchedModelInfos = new ArrayList<ModelInfo>();
-                    for (int m = 0; m < fetchedModels.size(); m++) {
-                        fetchedModelInfos.add(new ModelInfo(fetchedModels.get(m)));
-                    }
-                    ArrayList<String> options = new ArrayList<String>(fetchedModels);
-                    options.add(getString(R.string.other));
-                    ArrayAdapter<String> fetchedAdapter = new ArrayAdapter<String>(
-                            context,
-                            android.R.layout.simple_spinner_item,
-                            options
-                    );
-                    fetchedAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-                    chatSpinner.setAdapter(fetchedAdapter);
-                    thinkSpinner.setAdapter(fetchedAdapter);
-                    if (savedInstanceState.containsKey("chat_spinner_pos")) {
-                        chatSpinner.setSelection(savedInstanceState.getInt("chat_spinner_pos"));
-                    }
-                    if (savedInstanceState.containsKey("think_spinner_pos")) {
-                        thinkSpinner.setSelection(savedInstanceState.getInt("think_spinner_pos"));
-                    }
-                }
+            if (savedInstanceState.containsKey("last_chat_model")) {
+                lastChatModel = savedInstanceState.getString("last_chat_model");
+            }
+            if (savedInstanceState.containsKey("last_think_model")) {
+                lastThinkModel = savedInstanceState.getString("last_think_model");
+            }
+            fetchedModelInfos = new ArrayList<ModelInfo>(
+                    config.getActiveProviderSettings().getCachedModels());
+            fetched = savedInstanceState.getBoolean("fetched", false) &&
+                    !fetchedModelInfos.isEmpty();
+            if (fetched) {
+                applyModelInfos(fetchedModelInfos);
+            } else {
+                setupModelSpinner(chatSpinner, lastChatModel);
+                setupModelSpinner(thinkSpinner, lastThinkModel);
             }
         }
 
@@ -357,15 +347,8 @@ public class SettingsActivity extends Activity {
             outState.putInt("api_spinner_pos", apiSpinner.getSelectedItemPosition());
         }
         outState.putBoolean("fetched", fetched);
-        if (fetched && fetchedModels != null) {
-            outState.putStringArrayList("fetched_models", fetchedModels);
-            if (chatSpinner != null) {
-                outState.putInt("chat_spinner_pos", chatSpinner.getSelectedItemPosition());
-            }
-            if (thinkSpinner != null) {
-                outState.putInt("think_spinner_pos", thinkSpinner.getSelectedItemPosition());
-            }
-        }
+        outState.putString("last_chat_model", lastChatModel);
+        outState.putString("last_think_model", lastThinkModel);
     }
 
     @Override
@@ -457,12 +440,10 @@ public class SettingsActivity extends Activity {
     private void setSpinnerModels(Spinner spinner, String selected) {
         if (spinner == null) return;
         ArrayList<String> options = new ArrayList<String>();
-        for (int i = 0; i < fetchedModelInfos.size(); i++) {
-            options.add(fetchedModelInfos.get(i).getId());
-        }
-        if (selected != null && selected.length() > 0 && !options.contains(selected)) {
-            options.add(selected);
-        }
+        // The searchable picker owns the full catalog. Keeping hundreds of
+        // model names in both Spinner adapters wastes memory and makes the
+        // native drop-down sluggish on legacy devices.
+        if (selected != null && selected.length() > 0) options.add(selected);
         options.add(getString(R.string.other));
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(
                 context, android.R.layout.simple_spinner_item, options);
@@ -632,9 +613,7 @@ public class SettingsActivity extends Activity {
                         } else {
                             lastThinkModel = model.getId();
                         }
-                        ArrayAdapter adapter = (ArrayAdapter) spinner.getAdapter();
-                        int position = indexOfItem(adapter, model.getId());
-                        if (position >= 0) spinner.setSelection(position);
+                        setupModelSpinner(spinner, model.getId());
                     }
 
                     public void onRefreshRequested() {

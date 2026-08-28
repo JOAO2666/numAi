@@ -96,4 +96,9 @@
     <string name="only_free_models">Only free models</string>
     <string name="refresh_models">Refresh models</string>
     <string name="models_load_failed">Failed to load models from %1$s: %2$s</string>
+    <string name="attach_image">Прикрепить изображение</string>
+    <string name="clear_attachments">Очистить прикреплённые изображения</string>
+    <string name="attachments_cleared">Прикреплённые изображения удалены</string>
+    <string name="send_message">Отправить сообщение</string>
+    <string name="stop_generation">Остановить генерацию</string>
 </resources>

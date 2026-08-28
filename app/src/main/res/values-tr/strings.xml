@@ -94,4 +94,9 @@
     <string name="only_free_models">Only free models</string>
     <string name="refresh_models">Refresh models</string>
     <string name="models_load_failed">Failed to load models from %1$s: %2$s</string>
+    <string name="attach_image">Görsel ekle</string>
+    <string name="clear_attachments">Ekli görselleri temizle</string>
+    <string name="attachments_cleared">Ekli görseller temizlendi</string>
+    <string name="send_message">Mesaj gönder</string>
+    <string name="stop_generation">Oluşturmayı durdur</string>
 </resources>
