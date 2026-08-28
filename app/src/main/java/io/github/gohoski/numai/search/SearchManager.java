@@ -28,6 +28,10 @@ public class SearchManager {
 
     public SearchEngine getEngine(Context context) {
         String name = ConfigManager.getInstance(context).getConfig().getSearchEngine();
+        return getEngine(context, name);
+    }
+
+    public SearchEngine getEngine(Context context, String name) {
         if ("duckduckgo".equalsIgnoreCase(name))
             return new DuckDuckGo();
         return new Bing();

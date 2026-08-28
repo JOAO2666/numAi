@@ -201,7 +201,8 @@ public class FirstTimeActivity extends Activity {
         SettingsHelper.setupApiSpinner(context, providerKeySpinner, apiConfig, new SettingsHelper.ApiSelectionCallback() {
             @Override
             public void onApiSelected(String api) {
-                System.out.println(api);
+                apiConfig.selectProviderByUrl(ApiManager.getUrlByName(api));
+                if (keyText != null) keyText.setText(apiConfig.getConfig().getApiKey());
             }
         });
         if (recommendedIndex < providerKeySpinner.getCount()) {
@@ -336,8 +337,9 @@ public class FirstTimeActivity extends Activity {
                         });
                     }
                 } else {
+                    apiConfig.selectProviderByUrl(
+                            ApiManager.getUrlByName(providerKeySpinner.getSelectedItem().toString()));
                     apiConfig.updateApiKey(apiKey);
-                    apiConfig.updateBaseUrl(ApiManager.getUrlByName(providerKeySpinner.getSelectedItem().toString()));
                     apiService.getModels(new ApiCallback<ArrayList<String>>() {
                         @Override
                         public void onSuccess(ArrayList<String> models) {

@@ -11,6 +11,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -25,10 +26,15 @@ import io.github.gohoski.numai.api.ApiCallback;
 import io.github.gohoski.numai.api.ApiError;
 import io.github.gohoski.numai.api.ApiManager;
 import io.github.gohoski.numai.api.ApiService;
+import io.github.gohoski.numai.api.GeminiImageService;
 import io.github.gohoski.numai.data.ConfigManager;
 import io.github.gohoski.numai.model.Config;
+import io.github.gohoski.numai.model.ModelInfo;
 import io.github.gohoski.numai.ui.Loading;
+import io.github.gohoski.numai.ui.ModelPickerDialog;
 import io.github.gohoski.numai.ui.SettingsHelper;
+import io.github.gohoski.numai.util.ModelCatalog;
+import io.github.gohoski.numai.util.ModelLoadCoordinator;
 import io.github.gohoski.numai.util.ModelSelector;
 
 public class SettingsActivity extends Activity {
@@ -39,10 +45,14 @@ public class SettingsActivity extends Activity {
     EditText keyText;
     boolean fetched = false;
     ArrayList<String> fetchedModels = null;
+    ArrayList<ModelInfo> fetchedModelInfos = new ArrayList<ModelInfo>();
     String lastChatModel, lastThinkModel;
+    String activeProviderId;
+    final ModelLoadCoordinator modelLoadCoordinator = new ModelLoadCoordinator();
     CheckBox shrinkThink, webSearch, webFetch, disableToolsImg;
     String systemPrompt;
-    EditText updateDelay;
+    EditText updateDelay, geminiImageKey, geminiImageModel;
+    Button fetchGeminiImageModels;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,6 +61,8 @@ public class SettingsActivity extends Activity {
         context = this;
         config = ConfigManager.getInstance();
         final Config conf = config.getConfig();
+        activeProviderId = config.getActiveProviderId();
+        modelLoadCoordinator.switchProvider(activeProviderId);
         api = new ApiService(this);
         systemPrompt = conf.getSystemPrompt();
 
@@ -67,9 +79,7 @@ public class SettingsActivity extends Activity {
         SettingsHelper.setupApiSpinner(context, apiSpinner, config, new SettingsHelper.ApiSelectionCallback() {
             @Override
             public void onApiSelected(String api) {
-                fetched = false;
-                fetchedModels = null;
-                System.out.println(api);
+                switchProviderUi(ApiManager.getUrlByName(api));
             }
         });
 
@@ -103,6 +113,13 @@ public class SettingsActivity extends Activity {
             }
         });
 
+        if (fetchedModelInfos.isEmpty() &&
+                !config.getActiveProviderSettings().getCachedModels().isEmpty()) {
+            applyModelInfos(new ArrayList<ModelInfo>(
+                    config.getActiveProviderSettings().getCachedModels()));
+            fetched = true;
+        }
+
         shrinkThink = (CheckBox) findViewById(R.id.shrinkThinking);
         shrinkThink.setChecked(conf.getShrinkThink());
 
@@ -121,6 +138,18 @@ public class SettingsActivity extends Activity {
         updateDelay = (EditText) findViewById(R.id.update_delay);
         updateDelay.setText(conf.getUpdateDelay()+"");
 
+        geminiImageKey = (EditText) findViewById(R.id.gemini_image_api_key);
+        geminiImageKey.setText(config.getGeminiImageApiKey());
+        geminiImageModel = (EditText) findViewById(R.id.gemini_image_model);
+        geminiImageModel.setText(config.getGeminiImageModel());
+        fetchGeminiImageModels = (Button) findViewById(R.id.fetch_gemini_image_models);
+        fetchGeminiImageModels.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                fetchGeminiImageModels();
+            }
+        });
+
         // Restore saved instance state on rotation
         if (savedInstanceState != null) {
             if (savedInstanceState.containsKey("api_key") && keyText != null) {
@@ -131,6 +160,12 @@ public class SettingsActivity extends Activity {
             }
             if (savedInstanceState.containsKey("update_delay") && updateDelay != null) {
                 updateDelay.setText(savedInstanceState.getString("update_delay"));
+            }
+            if (savedInstanceState.containsKey("gemini_image_key") && geminiImageKey != null) {
+                geminiImageKey.setText(savedInstanceState.getString("gemini_image_key"));
+            }
+            if (savedInstanceState.containsKey("gemini_image_model") && geminiImageModel != null) {
+                geminiImageModel.setText(savedInstanceState.getString("gemini_image_model"));
             }
             if (savedInstanceState.containsKey("shrink_think") && shrinkThink != null) {
                 shrinkThink.setChecked(savedInstanceState.getBoolean("shrink_think"));
@@ -151,42 +186,43 @@ public class SettingsActivity extends Activity {
                 apiSpinner.setSelection(savedInstanceState.getInt("api_spinner_pos"));
             }
 
-            fetched = savedInstanceState.getBoolean("fetched", false);
-            if (fetched && savedInstanceState.containsKey("fetched_models")) {
-                fetchedModels = savedInstanceState.getStringArrayList("fetched_models");
-                if (fetchedModels != null) {
-                    ArrayList<String> options = new ArrayList<String>(fetchedModels);
-                    options.add(getString(R.string.other));
-                    ArrayAdapter<String> fetchedAdapter = new ArrayAdapter<String>(
-                            context,
-                            android.R.layout.simple_spinner_item,
-                            options
-                    );
-                    fetchedAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-                    chatSpinner.setAdapter(fetchedAdapter);
-                    thinkSpinner.setAdapter(fetchedAdapter);
-                    if (savedInstanceState.containsKey("chat_spinner_pos")) {
-                        chatSpinner.setSelection(savedInstanceState.getInt("chat_spinner_pos"));
-                    }
-                    if (savedInstanceState.containsKey("think_spinner_pos")) {
-                        thinkSpinner.setSelection(savedInstanceState.getInt("think_spinner_pos"));
-                    }
-                }
+            if (savedInstanceState.containsKey("last_chat_model")) {
+                lastChatModel = savedInstanceState.getString("last_chat_model");
+            }
+            if (savedInstanceState.containsKey("last_think_model")) {
+                lastThinkModel = savedInstanceState.getString("last_think_model");
+            }
+            fetchedModelInfos = new ArrayList<ModelInfo>(
+                    config.getActiveProviderSettings().getCachedModels());
+            fetched = savedInstanceState.getBoolean("fetched", false) &&
+                    !fetchedModelInfos.isEmpty();
+            if (fetched) {
+                applyModelInfos(fetchedModelInfos);
+            } else {
+                setupModelSpinner(chatSpinner, lastChatModel);
+                setupModelSpinner(thinkSpinner, lastThinkModel);
             }
         }
 
         findViewById(R.id.ok).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                final int selectedUpdateDelay = readUpdateDelay();
+                if (selectedUpdateDelay < 0) return;
+                saveGeminiImageSettings();
                 final String urlByName = ApiManager.getUrlByName(apiSpinner.getSelectedItem().toString());
-                if (conf.getBaseUrl().equals(urlByName)) {
+                final String selectedProviderId = ApiManager.getIdByUrl(urlByName);
+                config.selectProvider(selectedProviderId, urlByName);
+                activeProviderId = selectedProviderId;
+                config.updateApiKey(keyText.getText().toString());
+                if (fetched || config.getConfig().getChatModel().trim().length() > 0) {
                     config.setConfig(new Config(urlByName,
                             keyText.getText().toString(),
-                            chatSpinner.getSelectedItem().toString(),
-                            thinkSpinner.getSelectedItem().toString(),
+                            lastChatModel == null ? "" : lastChatModel,
+                            lastThinkModel == null ? "" : lastThinkModel,
                             shrinkThink.isChecked(),
                             systemPrompt,
-                            Integer.parseInt(updateDelay.getText().toString()),
+                            selectedUpdateDelay,
                             webSearch.isChecked(),
                             searchEngineSpinner.getSelectedItem().toString().toLowerCase(),
                             webFetch.isChecked(),
@@ -196,18 +232,25 @@ public class SettingsActivity extends Activity {
                     finish();
                 } else if (!fetched) {
                     final Loading loading = new Loading(context);
-                    final String orig = config.getConfig().getBaseUrl();
-                    config.updateBaseUrl(urlByName);
-                    api.getModels(new ApiCallback<ArrayList<String>>() {
+                    final ModelLoadCoordinator.RequestToken token =
+                            modelLoadCoordinator.begin(activeProviderId);
+                    api.getModelInfos(new ApiCallback<ArrayList<ModelInfo>>() {
                         @Override
-                        public void onSuccess(ArrayList<String> models) {
+                        public void onSuccess(ArrayList<ModelInfo> models) {
+                            if (!modelLoadCoordinator.accepts(token)) {
+                                loading.dismiss();
+                                return;
+                            }
+                            config.replaceModelCache(activeProviderId, models);
+                            String chatModel = ModelCatalog.validSelection("", models, false);
+                            String thinkingModel = ModelCatalog.validSelection("", models, true);
                             config.setConfig(new Config(urlByName,
                                     keyText.getText().toString(),
-                                    ModelSelector.selectChatModel(models),
-                                    ModelSelector.selectThinkingModel(models),
+                                    chatModel,
+                                    thinkingModel,
                                     shrinkThink.isChecked(),
                                     systemPrompt,
-                                    Integer.parseInt(updateDelay.getText().toString()),
+                                    selectedUpdateDelay,
                                     webSearch.isChecked(),
                                     searchEngineSpinner.getSelectedItem().toString().toLowerCase(),
                                     webFetch.isChecked(),
@@ -220,10 +263,8 @@ public class SettingsActivity extends Activity {
 
                         @Override
                         public void onError(ApiError error) {
-                            error.printStackTrace();
                             Toast.makeText(context, error.getMessage(), Toast.LENGTH_LONG).show();
                             loading.dismiss();
-                            config.updateBaseUrl(orig);
                         }
                     });
                 }
@@ -281,6 +322,12 @@ public class SettingsActivity extends Activity {
         if (updateDelay != null) {
             outState.putString("update_delay", updateDelay.getText().toString());
         }
+        if (geminiImageKey != null) {
+            outState.putString("gemini_image_key", geminiImageKey.getText().toString());
+        }
+        if (geminiImageModel != null) {
+            outState.putString("gemini_image_model", geminiImageModel.getText().toString());
+        }
         if (shrinkThink != null) {
             outState.putBoolean("shrink_think", shrinkThink.isChecked());
         }
@@ -300,15 +347,8 @@ public class SettingsActivity extends Activity {
             outState.putInt("api_spinner_pos", apiSpinner.getSelectedItemPosition());
         }
         outState.putBoolean("fetched", fetched);
-        if (fetched && fetchedModels != null) {
-            outState.putStringArrayList("fetched_models", fetchedModels);
-            if (chatSpinner != null) {
-                outState.putInt("chat_spinner_pos", chatSpinner.getSelectedItemPosition());
-            }
-            if (thinkSpinner != null) {
-                outState.putInt("think_spinner_pos", thinkSpinner.getSelectedItemPosition());
-            }
-        }
+        outState.putString("last_chat_model", lastChatModel);
+        outState.putString("last_think_model", lastThinkModel);
     }
 
     @Override
@@ -328,9 +368,34 @@ public class SettingsActivity extends Activity {
         }
     }
 
+    private void switchProviderUi(String baseUrl) {
+        String nextProviderId = ApiManager.getIdByUrl(baseUrl);
+        if (nextProviderId.equals(activeProviderId) && keyText == null) return;
+        if (nextProviderId.equals(activeProviderId) && chatSpinner != null &&
+                config.getConfig().getBaseUrl().equals(baseUrl)) return;
+
+        modelLoadCoordinator.switchProvider(nextProviderId);
+        config.selectProvider(nextProviderId, baseUrl);
+        activeProviderId = nextProviderId;
+        fetched = false;
+        fetchedModels = null;
+        fetchedModelInfos = new ArrayList<ModelInfo>(
+                config.getActiveProviderSettings().getCachedModels());
+
+        if (keyText != null) keyText.setText(config.getConfig().getApiKey());
+        lastChatModel = config.getConfig().getChatModel();
+        lastThinkModel = config.getConfig().getThinkingModel();
+        if (chatSpinner != null) setupModelSpinner(chatSpinner, lastChatModel);
+        if (thinkSpinner != null) setupModelSpinner(thinkSpinner, lastThinkModel);
+        if (!fetchedModelInfos.isEmpty()) {
+            applyModelInfos(fetchedModelInfos);
+            fetched = true;
+        }
+    }
+
     private void setupModelSpinner(final Spinner spinner, final String initialModel) {
         final ArrayList<String> options = new ArrayList<String>();
-        options.add(initialModel);
+        if (initialModel != null && initialModel.length() > 0) options.add(initialModel);
         options.add(getString(R.string.other));
         final ArrayAdapter<String> adapter = new ArrayAdapter<String>(
                 context,
@@ -360,6 +425,32 @@ public class SettingsActivity extends Activity {
             public void onNothingSelected(AdapterView<?> adapterView) {
             }
         });
+    }
+
+    private void applyModelInfos(ArrayList<ModelInfo> models) {
+        fetchedModelInfos = new ArrayList<ModelInfo>(models);
+        fetchedModels = new ArrayList<String>();
+        for (int i = 0; i < models.size(); i++) fetchedModels.add(models.get(i).getId());
+        lastChatModel = ModelCatalog.validSelection(lastChatModel, models, false);
+        lastThinkModel = ModelCatalog.validSelection(lastThinkModel, models, true);
+        setSpinnerModels(chatSpinner, lastChatModel);
+        setSpinnerModels(thinkSpinner, lastThinkModel);
+    }
+
+    private void setSpinnerModels(Spinner spinner, String selected) {
+        if (spinner == null) return;
+        ArrayList<String> options = new ArrayList<String>();
+        // The searchable picker owns the full catalog. Keeping hundreds of
+        // model names in both Spinner adapters wastes memory and makes the
+        // native drop-down sluggish on legacy devices.
+        if (selected != null && selected.length() > 0) options.add(selected);
+        options.add(getString(R.string.other));
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(
+                context, android.R.layout.simple_spinner_item, options);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+        int position = options.indexOf(selected);
+        if (position >= 0) spinner.setSelection(position);
     }
 
     private void showModelDialog(final Spinner spinner, final String previousModel) {
@@ -423,55 +514,114 @@ public class SettingsActivity extends Activity {
         return -1;
     }
 
-    private void loadModels(final Spinner spinner) {
-        if (fetched) {
-            spinner.performClick();
-            return;
+    private void saveGeminiImageSettings() {
+        if (geminiImageKey != null) {
+            config.updateGeminiImageApiKey(geminiImageKey.getText().toString());
         }
+        if (geminiImageModel != null) {
+            config.updateGeminiImageModel(geminiImageModel.getText().toString());
+        }
+    }
+
+    private int readUpdateDelay() {
+        try {
+            int value = Integer.parseInt(updateDelay.getText().toString().trim());
+            if (value < 10 || value > 10000) throw new NumberFormatException();
+            return value;
+        } catch (Exception ignored) {
+            Toast.makeText(context, R.string.invalid_update_delay,
+                    Toast.LENGTH_SHORT).show();
+            updateDelay.requestFocus();
+            return -1;
+        }
+    }
+
+    private void fetchGeminiImageModels() {
+        // Save the text currently on screen so a newly pasted key can be used immediately.
+        saveGeminiImageSettings();
         final Loading loading = new Loading(context);
-        api.getModels(new ApiCallback<ArrayList<String>>() {
+        GeminiImageService gemini = new GeminiImageService(context);
+        gemini.getAvailableImageModels(new ApiCallback<ArrayList<String>>() {
             @Override
-            public void onSuccess(ArrayList<String> result) {
-                fetchedModels = result;
-                ArrayList<String> options = new ArrayList<String>(result);
-                String other = getString(R.string.other);
-                String chatSel = chatSpinner.getSelectedItem() == null ? null : chatSpinner.getSelectedItem().toString();
-                if (chatSel != null && !chatSel.equals(other) && !options.contains(chatSel)) {
-                    options.add(chatSel);
-                }
-                String thinkSel = thinkSpinner.getSelectedItem() == null ? null : thinkSpinner.getSelectedItem().toString();
-                if (thinkSel != null && !thinkSel.equals(other) && !options.contains(thinkSel)) {
-                    options.add(thinkSel);
-                }
-                options.add(other);
-                ArrayAdapter<String> adapter = new ArrayAdapter<String>(
-                        context,
-                        android.R.layout.simple_spinner_item,
-                        options
-                );
-                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-                chatSpinner.setAdapter(adapter);
-                thinkSpinner.setAdapter(adapter);
-                Config conf = config.getConfig();
-                int chatPos = options.indexOf(conf.getChatModel());
-                if (chatPos >= 0) {
-                    chatSpinner.setSelection(chatPos);
-                }
-                int thinkPos = options.indexOf(conf.getThinkingModel());
-                if (thinkPos >= 0) {
-                    thinkSpinner.setSelection(thinkPos);
-                }
+            public void onSuccess(final ArrayList<String> models) {
                 loading.dismiss();
-                fetched = true;
-                spinner.performClick();
+                if (models == null || models.isEmpty()) {
+                    Toast.makeText(context, R.string.gemini_image_models_empty, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                final String[] modelNames = models.toArray(new String[models.size()]);
+                new AlertDialog.Builder(context)
+                        .setTitle(R.string.choose_gemini_image_model)
+                        .setItems(modelNames, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                if (which >= 0 && which < modelNames.length) {
+                                    geminiImageModel.setText(modelNames[which]);
+                                }
+                            }
+                        })
+                        .show();
             }
 
             @Override
             public void onError(ApiError error) {
-                error.printStackTrace();
                 loading.dismiss();
-                Toast.makeText(context, error.getMessage(), Toast.LENGTH_SHORT).show();
+                Toast.makeText(context, error.getMessage(), Toast.LENGTH_LONG).show();
             }
         });
+    }
+
+    private void loadModels(final Spinner spinner) {
+        if (fetched && !fetchedModelInfos.isEmpty()) {
+            showModelPicker(spinner);
+            return;
+        }
+        final ModelLoadCoordinator.RequestToken token =
+                modelLoadCoordinator.begin(activeProviderId);
+        final Loading loading = new Loading(context);
+        api.getModelInfos(new ApiCallback<ArrayList<ModelInfo>>() {
+            @Override
+            public void onSuccess(ArrayList<ModelInfo> result) {
+                loading.dismiss();
+                if (!modelLoadCoordinator.accepts(token)) return;
+                config.replaceModelCache(activeProviderId, result);
+                applyModelInfos(result);
+                fetched = true;
+                showModelPicker(spinner);
+            }
+
+            @Override
+            public void onError(ApiError error) {
+                loading.dismiss();
+                if (!modelLoadCoordinator.accepts(token)) return;
+                Toast.makeText(context, getString(R.string.models_load_failed,
+                        ApiManager.getNameByUrl(config.getConfig().getBaseUrl()),
+                        error.getMessage()), Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void showModelPicker(final Spinner spinner) {
+        boolean thinking = spinner == thinkSpinner;
+        ModelPickerDialog.show(context,
+                thinking ? getString(R.string.thinking_model) : getString(R.string.chat_model),
+                fetchedModelInfos, thinking ? lastThinkModel : lastChatModel,
+                new ModelPickerDialog.Callback() {
+                    public void onModelSelected(ModelInfo model) {
+                        if (spinner == chatSpinner) {
+                            lastChatModel = model.getId();
+                        } else {
+                            lastThinkModel = model.getId();
+                        }
+                        setupModelSpinner(spinner, model.getId());
+                    }
+
+                    public void onRefreshRequested() {
+                        config.invalidateModelCache(activeProviderId);
+                        fetched = false;
+                        fetchedModelInfos = new ArrayList<ModelInfo>();
+                        loadModels(spinner);
+                    }
+                });
     }
 }

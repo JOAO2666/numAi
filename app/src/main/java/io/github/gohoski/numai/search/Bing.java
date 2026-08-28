@@ -62,7 +62,7 @@ class Bing implements SearchEngine {
     @Override
     public List<SearchResult> search(String q) throws SearchException, ApiError, IOException {
         // Bing is still accessible over HTTP for old Android User-Agent
-        ApiRequest request = new ApiRequest("http://www.bing.com", "/search", "GET")
+        ApiRequest request = new ApiRequest("https://www.bing.com", "/search", "GET")
                 .addParam("q", q)
                 .addParam("qs", "ds")
                 .addParam("form", "QBLH");
@@ -125,14 +125,14 @@ class Bing implements SearchEngine {
                     "latency", String.valueOf(latency)
             );
 
-            ApiRequest verifyReq = new ApiRequest("http://www.bing.com", "/bd/issuertoken/verify", "POST")
+        ApiRequest verifyReq = new ApiRequest("https://www.bing.com", "/bd/issuertoken/verify", "POST")
                     .addParam("IID", "PoW")
                     .addParam("SFX", "1")
                     .addParam("IG", fp.get("ig"));
             verifyReq.setBody(postBody);
             addStandardHeaders(verifyReq);
             verifyReq.addHeader("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
-            verifyReq.addHeader("Origin", "http://www.bing.com");
+            verifyReq.addHeader("Origin", "https://www.bing.com");
             verifyReq.addHeader("Referer", queryUrl);
 
             ApiResponse verifyResp = executeWithRetry(verifyReq);
@@ -143,7 +143,7 @@ class Bing implements SearchEngine {
             sendPowLog("VerCallStatus", "200", queryUrl);
 
             // BdVerify & SBI
-            ApiRequest bdReq = new ApiRequest("http://www.bing.com", "/bd/verify", "GET")
+            ApiRequest bdReq = new ApiRequest("https://www.bing.com", "/bd/verify", "GET")
                     .addParam("IID", "BdVerify")
                     .addParam("SFX", "1")
                     .addParam("IG", fp.get("ig"));
@@ -157,7 +157,7 @@ class Bing implements SearchEngine {
             updateCookiesFromResponse(bdResp);
             closeResponseBody(bdResp);
 
-            ApiRequest sbiReq = new ApiRequest("http://www.bing.com", "/images/sbi", "GET")
+            ApiRequest sbiReq = new ApiRequest("https://www.bing.com", "/images/sbi", "GET")
                     .addParam("mmasync", "1")
                     .addParam("ig", fp.get("ig"))
                     .addParam("iid", ".5055")
@@ -190,7 +190,7 @@ class Bing implements SearchEngine {
 //            try { Thread.sleep(150); } catch (InterruptedException ignored) {}
 
             Log.i("Bing", "Fetching verified SERP");
-            ApiRequest finalReq = new ApiRequest("http://www.bing.com", "/search", "GET")
+            ApiRequest finalReq = new ApiRequest("https://www.bing.com", "/search", "GET")
                     .addParam("q", q)
                     .addParam("qs", "ds")
                     .addParam("form", "QBLH")
@@ -215,7 +215,7 @@ class Bing implements SearchEngine {
 //            try { Thread.sleep(5000); } catch (InterruptedException ignored) {}
 
 //            String retryIg = (fp != null && fp.containsKey("ig")) ? fp.get("ig") : "";
-            ApiRequest retryReq = new ApiRequest("http://www.bing.com", "/search", "GET")
+            ApiRequest retryReq = new ApiRequest("https://www.bing.com", "/search", "GET")
                     .addParam("q", q)
                     .addParam("qs", "ds")
                     .addParam("form", "QBLH");
@@ -444,7 +444,7 @@ class Bing implements SearchEngine {
 
             urlBuilder.append("&dl=").append(dl);
 
-            ApiRequest finalLsReq = new ApiRequest("http://www.bing.com", urlBuilder.toString(), "GET");
+            ApiRequest finalLsReq = new ApiRequest("https://www.bing.com", urlBuilder.toString(), "GET");
             addStandardHeaders(finalLsReq);
             finalLsReq.addHeader("Referer", queryUrl);
 
@@ -497,7 +497,7 @@ class Bing implements SearchEngine {
             String xmlBody = "<ClientInstRequest><Events><E><T>Event.ClientInst</T><IG>" + fp.get("ig")
                     + "</IG><TS>" + ts + "</TS><D><![CDATA[" + bodyData + "]]></D></E></Events><STS>" + ts + "</STS></ClientInstRequest>";
 
-            ApiRequest request = new ApiRequest("http://www.bing.com", "/fd/ls/lsp.aspx?", "POST");
+            ApiRequest request = new ApiRequest("https://www.bing.com", "/fd/ls/lsp.aspx?", "POST");
             request.setBody(xmlBody);
             addStandardHeaders(request);
             request.addHeader("Content-Type", "text/xml");

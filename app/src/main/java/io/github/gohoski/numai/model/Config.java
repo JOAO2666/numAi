@@ -21,7 +21,7 @@ public class Config {
 
     public Config(String baseUrl, String apiKey, String chatModel, String thinkingModel, boolean shrinkThink, String systemPrompt, int updateDelay, boolean webSearchEnabled, String searchEngine, boolean webFetchEnabled, boolean disableToolsWithImage) {
         this.baseUrl = baseUrl;
-        this.apiKey = apiKey;
+        this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.chatModel = chatModel;
         this.thinkingModel = thinkingModel;
         this.shrinkThink = shrinkThink;
@@ -37,7 +37,7 @@ public class Config {
     public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
 
     public String getApiKey() { return apiKey; }
-    public void setApiKey(String apiKey) { this.apiKey = apiKey; }
+    public void setApiKey(String apiKey) { this.apiKey = apiKey == null ? "" : apiKey.trim(); }
 
     public String getChatModel() { return chatModel; }
     public void setChatModel(String chatModel) { this.chatModel = chatModel; }

@@ -47,7 +47,6 @@ class DuckDuckGo implements SearchEngine {
 
         ApiResponse response = api.execute(request);
         String html = readResponseAsString(response);
-        System.out.println(html);
         return parse(html);
     }
 

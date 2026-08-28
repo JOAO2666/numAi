@@ -1,6 +1,9 @@
 package io.github.gohoski.numai.ui;
 
+import android.app.AlertDialog;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.text.method.LinkMovementMethod;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -10,6 +13,9 @@ import android.widget.ArrayAdapter;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import java.io.FileInputStream;
+import java.io.IOException;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,6 +23,7 @@ import cc.nnproject.json.JSON;
 import cc.nnproject.json.JSONArray;
 import cc.nnproject.json.JSONException;
 import cc.nnproject.json.JSONObject;
+import io.github.gohoski.numai.ChatProcessingService;
 import io.github.gohoski.numai.R;
 import io.github.gohoski.numai.model.Message;
 import io.github.gohoski.numai.model.Role;
@@ -110,6 +117,8 @@ public class MessageAdapter extends ArrayAdapter<Message> {
 
             holder = new ReceivedViewHolder();
             holder.messageText = (TextView) convertView.findViewById(R.id.message_text);
+            holder.mathMarkdown = (MathMarkdownView) convertView.findViewById(R.id.message_math);
+            holder.generatedImage = (android.widget.ImageView) convertView.findViewById(R.id.generated_image);
             holder.llm = (TextView) convertView.findViewById(R.id.llm);
             holder.thinkingLayout = (LinearLayout) convertView.findViewById(R.id.thinkingLayout);
             holder.thinkingProcess = (TextView) convertView.findViewById(R.id.thinkingProcess);
@@ -126,12 +135,17 @@ public class MessageAdapter extends ArrayAdapter<Message> {
 
         String thinkingRaw = message.getThinkingRaw();
         String displayRaw = message.getDisplayRaw();
+        boolean isGenerating = message.getChatId() != null &&
+                message.getGenerationId() != null &&
+                ChatProcessingService.isGenerationActive(
+                        message.getChatId(), message.getGenerationId());
 
         // Thinking Box
         if (thinkingRaw != null && thinkingRaw.length() != 0) {
             holder.thinkingLayout.setVisibility(View.VISIBLE);
             holder.thinkingProcess.setMovementMethod(LinkMovementMethod.getInstance());
-            holder.thinkingProcess.setText(message.getParsedThinkContent(context, false));
+            holder.thinkingProcess.setText(
+                    message.getParsedThinkContent(context, isGenerating));
         } else {
             holder.thinkingLayout.setVisibility(View.GONE);
         }
@@ -198,12 +212,70 @@ public class MessageAdapter extends ArrayAdapter<Message> {
 
         // Response Box
         holder.llm.setText(message.getLlm());
+        String outputImage = message.getOutputImage();
+        if (outputImage != null && outputImage.length() > 0) {
+            Bitmap generatedBitmap = decodeGeneratedImage(outputImage, 1024);
+            if (generatedBitmap != null) {
+                holder.generatedImage.setImageBitmap(generatedBitmap);
+                holder.generatedImage.setVisibility(View.VISIBLE);
+                holder.generatedImage.setTag(outputImage);
+                holder.generatedImage.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        Object tag = view.getTag();
+                        if (tag instanceof String) showGeneratedImage((String) tag);
+                    }
+                });
+            } else {
+                holder.generatedImage.setImageBitmap(null);
+                holder.generatedImage.setVisibility(View.GONE);
+            }
+        } else {
+            holder.generatedImage.setImageBitmap(null);
+            holder.generatedImage.setVisibility(View.GONE);
+            holder.generatedImage.setTag(null);
+            holder.generatedImage.setOnClickListener(null);
+        }
+
         if (displayRaw != null && displayRaw.length() != 0) {
             holder.response.setVisibility(View.VISIBLE);
-            holder.messageText.setMovementMethod(LinkMovementMethod.getInstance());
-            holder.messageText.setText(message.getParsedDisplayContent(context, false));
+            // Loading a WebView and MathJax for every streamed token is very
+            // expensive on old devices. Render the lightweight native preview
+            // while streaming, then typeset the completed response once.
+            if (!isGenerating && MathMarkdownView.canRender(displayRaw)) {
+                holder.messageText.setVisibility(View.GONE);
+                holder.mathMarkdown.setVisibility(View.VISIBLE);
+                final MathMarkdownView mathView = holder.mathMarkdown;
+                final String mathRaw = displayRaw;
+                final Message boundMessage = message;
+                final ReceivedViewHolder boundHolder = holder;
+                mathView.setRenderErrorListener(new MathMarkdownView.RenderErrorListener() {
+                    @Override
+                    public void onRenderError() {
+                        if (mathRaw.equals(mathView.getMarkdown())) {
+                            mathView.setVisibility(View.GONE);
+                            boundHolder.messageText.setVisibility(View.VISIBLE);
+                            boundHolder.messageText.setMovementMethod(LinkMovementMethod.getInstance());
+                            boundHolder.messageText.setText(
+                                    boundMessage.getParsedDisplayContent(context, false));
+                        }
+                    }
+                });
+                holder.mathMarkdown.setMarkdown(displayRaw);
+            } else {
+                holder.mathMarkdown.setRenderErrorListener(null);
+                holder.mathMarkdown.setVisibility(View.GONE);
+                holder.messageText.setVisibility(View.VISIBLE);
+                holder.messageText.setMovementMethod(LinkMovementMethod.getInstance());
+                holder.messageText.setText(
+                        message.getParsedDisplayContent(context, isGenerating));
+            }
         } else {
-            holder.response.setVisibility(View.GONE);
+            holder.mathMarkdown.setRenderErrorListener(null);
+            holder.response.setVisibility(holder.generatedImage.getVisibility() == View.VISIBLE ? View.VISIBLE : View.GONE);
+            holder.mathMarkdown.setVisibility(View.GONE);
+            holder.messageText.setVisibility(View.VISIBLE);
+            holder.messageText.setText("");
         }
 
         return convertView;
@@ -215,6 +287,8 @@ public class MessageAdapter extends ArrayAdapter<Message> {
 
     private static class ReceivedViewHolder {
         TextView messageText;
+        MathMarkdownView mathMarkdown;
+        android.widget.ImageView generatedImage;
         TextView llm;
         LinearLayout thinkingLayout;
         TextView thinkingProcess;
@@ -224,5 +298,46 @@ public class MessageAdapter extends ArrayAdapter<Message> {
         LinearLayout readingLayout;
         TextView readingUrls;
         View response;
+    }
+
+    private Bitmap decodeGeneratedImage(String fileName, int maxDimension) {
+        FileInputStream input = null;
+        try {
+            input = context.openFileInput(fileName);
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inJustDecodeBounds = true;
+            BitmapFactory.decodeStream(input, null, options);
+            input.close();
+            input = null;
+
+            int sample = 1;
+            while ((options.outWidth / sample) > maxDimension ||
+                    (options.outHeight / sample) > maxDimension) {
+                sample *= 2;
+            }
+            options.inJustDecodeBounds = false;
+            options.inSampleSize = sample;
+            input = context.openFileInput(fileName);
+            return BitmapFactory.decodeStream(input, null, options);
+        } catch (Exception ignored) {
+            return null;
+        } finally {
+            if (input != null) {
+                try { input.close(); } catch (IOException ignored) {}
+            }
+        }
+    }
+
+    private void showGeneratedImage(String fileName) {
+        Bitmap image = decodeGeneratedImage(fileName, 1600);
+        if (image == null) return;
+        android.widget.ImageView view = new android.widget.ImageView(context);
+        view.setImageBitmap(image);
+        view.setAdjustViewBounds(true);
+        new AlertDialog.Builder(context)
+                .setTitle(R.string.gemini_generated_image)
+                .setView(view)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
     }
 }

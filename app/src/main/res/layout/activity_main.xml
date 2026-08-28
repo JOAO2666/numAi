@@ -74,6 +74,7 @@
                     android:id="@+id/attach_button"
                     android:layout_width="wrap_content"
                     android:layout_height="fill_parent"
+                    android:contentDescription="@string/attach_image"
                     android:src="@android:drawable/ic_input_add"/>
                 <TextView
                     android:id="@+id/img_count"
@@ -90,6 +91,7 @@
                     android:paddingRight="5dp"
                     android:width="22dp"
                     android:height="22dp"
+                    android:contentDescription="@string/clear_attachments"
                     android:visibility="gone"
                     />
             </FrameLayout>
@@ -105,6 +107,16 @@
                 android:layout_marginBottom="0dp"
                 android:id="@+id/thinking"
                 android:visibility="visible"/>
+
+            <ToggleButton
+                android:id="@+id/image_generation"
+                android:layout_width="wrap_content"
+                android:layout_height="fill_parent"
+                android:textOn="@string/gemini_image_toggle"
+                android:textOff="@string/gemini_image_toggle"
+                android:checked="false"
+                android:paddingLeft="8dp"
+                android:paddingRight="8dp" />
 
             <CheckBox
                 android:layout_width="wrap_content"
@@ -129,6 +141,7 @@
                 android:id="@+id/send_button"
                 android:layout_width="wrap_content"
                 android:layout_height="fill_parent"
+                android:contentDescription="@string/send_message"
                 android:src="@android:drawable/ic_menu_send"/>
 
         </LinearLayout>
