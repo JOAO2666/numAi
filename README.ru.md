@@ -1,5 +1,5 @@
 # numAi
-[English](README.md) / **русский** / [简体中文](README.zh.md)
+[English](README.md) / [Português](README.pt-BR.md) / **русский** / [简体中文](README.zh.md)
 
 ИИ-приложение, совместимое с **Android 1.0+**, с поддержкой глубокого мышления, восприятия изображений и веб-поиска. Получите доступ к ChatGPT, DeepSeek, Gemini, Qwen, GLM, Kimi и другим нейросетям в одном простом приложении на вашем старом устройстве.
 * **Telegram-канал с обновлениями**: [@AppDataApps](https://t.me/AppDataApps)
@@ -11,7 +11,7 @@
 <img src="img/scr1.png" alt="Скриншот" width="200"/> <img src="img/scr2.png" alt="Скриншот" width="200"/> <img src="img/scr3.png" alt="Скриншот" width="200"/> <img src="img/scr4.png" alt="Скриншот" width="200"/> <img src="img/scr5.png" alt="Скриншот" width="200"/> <img src="img/scr6.png" alt="Скриншот" width="200"/> <img src="img/scr7.png" alt="Скриншот" width="200"/> <img src="img/scr8.png" alt="Скриншот" width="200"/>
 
 ## 📥 Скачать
-* [GitHub Releases](https://github.com/gohoski/numAi/releases)
+* [GitHub Releases](https://github.com/JOAO2666/numAi/releases)
 * [4PDA](https://4pda.to/forum/index.php?showtopic=1116157)
 * Telegram (ссылка в начале README)
 
@@ -39,7 +39,7 @@
 * `deepseek-v4-flash-free` — поддерживает только чат и мышление. Для восприятия изображений используйте другой API.
 
 ## Сообщения об ошибках
-**Сообщайте об ошибках во вкладке [Issues](https://github.com/gohoski/numAi/issues)!** Не забудьте указать, на какой версии Android вы столкнулись с багом.
+**Сообщайте об ошибках во вкладке [Issues](https://github.com/JOAO2666/numAi/issues)!** Не забудьте указать, на какой версии Android вы столкнулись с багом.
 
 ## Руководство по настройке API-ключей
 Все приведенные ниже API имеют бесплатные лимиты — оплата не требуется.
@@ -90,4 +90,4 @@
 
 ОДНАКО библиотека NNJSON распространяется по лицензии MIT. Подробнее см. в файле [LICENSE-NNJSON](LICENSE-NNJSON).
 
-Изображение робота Android воспроизведено или модифицировано на основе работы, созданной и предоставленной компанией Google, и используется в соответствии с условиями, описанными в лицензии [Creative Commons 3.0 Attribution License](https://creativecommons.org/licenses/by/
+Изображение робота Android воспроизведено или модифицировано на основе работы, созданной и предоставленной компанией Google, и используется в соответствии с условиями, описанными в лицензии [Creative Commons 3.0 Attribution License](https://creativecommons.org/licenses/by/3.0/).

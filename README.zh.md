@@ -1,5 +1,5 @@
 # numAi
-[English](README.md) / [русский](README.ru.md) / **简体中文** 
+[English](README.md) / [Português](README.pt-BR.md) / [русский](README.ru.md) / **简体中文**
 
 一款兼容 **Android 1.0+** 的 AI 应用，支持深度思考、图像视觉和网页搜索。只需一个简单应用，即可在您的老旧设备上访问 ChatGPT、DeepSeek、Gemini、Qwen、GLM、Kimi 及其他大语言模型 (LLM)。
 * **Telegram 更新频道**：[@AppDataApps](https://t.me/AppDataApps)
@@ -11,7 +11,7 @@
 <img src="img/scr1.png" alt="截图" width="200"/> <img src="img/scr2.png" alt="截图" width="200"/> <img src="img/scr3.png" alt="截图" width="200"/> <img src="img/scr4.png" alt="截图" width="200"/> <img src="img/scr5.png" alt="截图" width="200"/> <img src="img/scr6.png" alt="截图" width="200"/> <img src="img/scr7.png" alt="截图" width="200"/> <img src="img/scr8.png" alt="截图" width="200"/>
 
 ## 📥 下载
-* [GitHub Releases](https://github.com/gohoski/numAi/releases)
+* [GitHub Releases](https://github.com/JOAO2666/numAi/releases)
 * [4PDA](https://4pda.to/forum/index.php?showtopic=1116157)
 * Telegram（链接位于 README 顶部）
 
@@ -39,7 +39,7 @@
 * `deepseek-v4-flash-free` — 仅支持聊天和推理功能。如需视觉功能，请使用其他 API。
 
 ## 错误报告
-**请在 [Issues](https://github.com/gohoski/numAi/issues) 标签页中报告错误！** 请务必说明您遇到该错误时所使用的 Android 版本。
+**请在 [Issues](https://github.com/JOAO2666/numAi/issues) 标签页中报告错误！** 请务必说明您遇到该错误时所使用的 Android 版本。
 
 ## API 密钥设置指南
 以下所有 API 均提供免费额度——无需付费。

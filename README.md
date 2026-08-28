@@ -1,93 +1,178 @@
 # numAi
-**English** / [русский](README.ru.md) / [简体中文](README.zh.md)
 
-An AI app compatible with **Android 1.0+** with support for deep thinking, image vision, and web search. Access ChatGPT, DeepSeek, Gemini, Qwen, GLM, Kimi, and other LLMs in one simple app on your legacy device.
-* **Telegram channel with updates**: [@AppDataApps](https://t.me/AppDataApps)
-* Join our **[Retro Android Group](https://t.me/retroandroidgroup)** on Telegram!
-* Discord server: [Android Afterlife](https://discord.gg/2JqfEkQyck)
+**English** · [Português (Brasil)](README.pt-BR.md) · [Русский](README.ru.md) · [简体中文](README.zh.md)
 
-![numAi](img/logo.png "AI client for legacy Android devices")
+<p align="center">
+  <img src="img/logo.png" alt="numAi logo" width="180">
+</p>
 
-<img src="img/scr1.png" alt="Screenshot" width="200"/> <img src="img/scr2.png" alt="Screenshot" width="200"/> <img src="img/scr3.png" alt="Screenshot" width="200"/> <img src="img/scr4.png" alt="Screenshot" width="200"/> <img src="img/scr5.png" alt="Screenshot" width="200"/> <img src="img/scr6.png" alt="Screenshot" width="200"/> <img src="img/scr7.png" alt="Screenshot" width="200"/> <img src="img/scr8.png" alt="Screenshot" width="200"/>
+<p align="center">
+  A lightweight, multi-provider AI client built for <strong>Android 1.0 and newer</strong>.
+</p>
 
-## 📥 Download
-* [GitHub Releases](https://github.com/gohoski/numAi/releases)
-* [4PDA](https://4pda.to/forum/index.php?showtopic=1116157)
-* Telegram (link at the top of the README)
+<p align="center">
+  <a href="artifacts/numAi-1.0.0-debug.apk?raw=1"><strong>Download the latest development APK</strong></a>
+  ·
+  <a href="https://github.com/JOAO2666/numAi/releases">Releases</a>
+  ·
+  <a href="https://github.com/JOAO2666/numAi/issues">Report a bug</a>
+</p>
 
-## Features
-* Support of various APIs and models that support the OpenAI format (i.e. most LLM APIs)
-* Thinking mode (switch between chat and thinking model)
-* Vision (image attachments)
-* Ability to change the system prompt
-* Importing API key from file
-* Markdown formatting support (including tables)
-* Web search through Bing (Android 1.0+, recommended) and DuckDuckGo (Android 1.6+, requires Wolfius, may get limited)
-* Web fetch (Android 1.6+, requires [Wolfius](https://github.com/gohoski/Wolfius))
-### TODO
-* File attachments
+> [!IMPORTANT]
+> numAi is an independent client. It does not include API keys, credits, or subscriptions. Availability, pricing, quotas, and supported features are controlled by each provider and model.
 
-## Recommended models
-> [!WARNING]  
-> Not all models support vision. Please check if the model supports image attachments natively beforehand.
-### VoidAI
-* Chat model: `deepseek-v3.2` (or `gemini-3.5-flash-lite`/`kimi-k3` for vision)
-* Thinking model: `deepseek-v4-flash` (or `gemini-3.6-flash`/`kimi-k3` for vision)
-### Ollama Cloud
-* `gemma4:31b` — supports chat, thinking and vision
-### OpenCode Zen
-* `deepseek-v4-flash-free` — supports chat and thinking only. For vision, please use another API.
+## What it does
 
-## Reporting bugs
-**Report bugs in the [Issues](https://github.com/gohoski/numAi/issues) tab!** Don't forget to specify which version of Android you encountered the bug on.
+numAi brings modern AI chat to devices ranging from the first Android release to current versions, while keeping the APK small and the interface responsive.
 
-## API key setup guide
-All of the following APIs have free quotas—no payment is required.
-### VoidAI (Android 1.6+)
-> [!WARNING]  
-> This API requires [Wolfius](https://github.com/gohoski/Wolfius) to work correctly on Android <3.0.
+- OpenAI-compatible chat with streaming responses
+- Separate chat and reasoning model selection for every provider
+- Multiple image attachments for vision-capable models
+- Markdown rendering, tables, code blocks, and MathJax formulas
+- Multiline display math with `$$ ... $$` and `\[ ... \]`
+- Web search through Bing or DuckDuckGo
+- Web-page fetching for supported Android versions
+- Background generation with cancellation support
+- Per-provider API keys, model choices, and cached model catalogs
+- Custom system prompt and custom OpenAI-compatible base URL
+- Import an API key from a local file
+- Automatic compatibility fallback when a model rejects tools or reasoning options
 
-1. On a modern browser, go to [voidai.app/register](https://voidai.app/register) and create an account.
-2. After logging in, navigate to the **API Keys** section in your dashboard.
-3. Click **Generate New API Key**.
-4. Copy the key that appears and transfer it to your device.
+Math formulas remain readable even when MathJax cannot load. Long display formulas can be scrolled horizontally instead of overflowing the screen.
 
-### Ollama Cloud
-> [!TIP]  
-> This API is recommended to use on Android 1.0+, as it still supports TLS 1.0 w/o SNI.
+## Supported providers
 
-1. On a modern browser, go to [ollama.com](https://ollama.com/) and create an account.
-2. After logging in, go to [ollama.com/settings/keys](https://ollama.com/settings/keys).
-3. Click **Add API Key**, then **Generate API Key**.
-4. Copy the key and transfer it to your device. Instead of VoidAI, choose Ollama Cloud in the dropdown menu.
+The app currently includes presets for these OpenAI-compatible services:
 
-### OpenCode Zen (Android 1.6+)
-> [!WARNING]  
-> This API requires [Wolfius](https://github.com/gohoski/Wolfius) to work correctly on Android <4.4.
+| Provider | Base URL |
+|---|---|
+| VoidAI | `https://api.voidai.app/v1` |
+| Ollama Cloud | `https://ollama.com/v1` |
+| OpenCode Zen | `https://opencode.ai/zen/v1` |
+| NavyAI | `https://api.navy/v1` |
+| OpenRouter | `https://openrouter.ai/api/v1` |
+| NVIDIA NIM | `https://integrate.api.nvidia.com/v1` |
+| TokenRouter | `https://api.tokenrouter.com/v1` |
+| Groq | `https://api.groq.com/openai/v1` |
+| Together AI | `https://api.together.ai/v1` |
+| Fireworks AI | `https://api.fireworks.ai/inference/v1` |
+| DeepInfra | `https://api.deepinfra.com/v1/openai` |
+| Hugging Face | `https://router.huggingface.co/v1` |
+| Google AI Studio | `https://generativelanguage.googleapis.com/v1beta/openai` |
+| Z.ai | `https://api.z.ai/api/paas/v4` |
+| BigModel (Z.ai China) | `https://open.bigmodel.cn/api/paas/v4` |
+| Kilo Gateway | `https://api.kilo.ai/api/gateway` |
 
-1. On a modern browser, go to [opencode.ai/auth](https://opencode.ai/auth) and create an account.
-2. After logging in, navigate to the **API Keys** section in your dashboard.
-3. Click **Create API Key** and enter any key name.
-4. Copy the key that appears and transfer it to your device.
+You can also enter a custom base URL. The service must expose OpenAI-style `/models` and `/chat/completions` endpoints for full compatibility.
 
-## Build
-The project is developed under the following build environment.
-* Android Studio 2.3.2 [`Download`](https://developer.android.com/studio/archive)
-  * Android Studio 1.0–3.1.2 may support Android <2.2, but 2.3.2 is recommended for development as it's simultaneously old and supported.
-  * Latest AS versions still support Android 2.2 and later (though they are made with 4.1+ in mind)—you can use them if you don't prioritize old Android versions.
-* Android SDK of any version *(25 recommended)*
-  * It is not required to use an old SDK for developing legacy apps.
-* Android 1.0 emulator from the SDK [`Download`](https://developer.android.com/sdk/older_releases#release-1.0-r1)
+> [!NOTE]
+> numAi filters known non-chat models from provider catalogs. Vision, tool calling, and reasoning support still vary by individual model.
 
-It is recommended to use AS while contributing; however, you may use another IDE as long as you make the project still usable in AS.
+## Install
+
+1. Download [`numAi-1.0.0-debug.apk`](artifacts/numAi-1.0.0-debug.apk?raw=1).
+2. Transfer it to the Android device.
+3. Allow installation from unknown sources when Android asks.
+4. Install or update numAi.
+
+The development APK is signed with a debug certificate. Stable packages, when available, are published on the [Releases page](https://github.com/JOAO2666/numAi/releases).
+
+## Quick start
+
+1. Open **Settings**.
+2. Select a provider or enter a custom API base URL.
+3. Enter that provider's API key.
+4. Load the model catalog.
+5. Choose a chat model and, optionally, a reasoning model.
+6. Return to the conversation and send a message.
+
+Choose a vision-capable model before attaching images. If a provider rejects web tools or provider-specific reasoning controls, numAi automatically retries with a simpler compatible request.
+
+## API-key safety
+
+- Create a separate key for numAi whenever the provider allows it.
+- Never commit keys to Git, paste them into bug reports, or publish screenshots containing them.
+- Revoke and replace a key immediately if it is exposed.
+- Keys are stored locally and separately for each provider.
+- Prefer HTTPS for every custom endpoint.
+
+## Legacy Android notes
+
+- Minimum SDK: Android API 1
+- Target and compile SDK: Android API 25
+- Some HTTPS providers require [Wolfius](https://github.com/gohoski/Wolfius) on old Android versions because the original TLS stack lacks modern protocol and SNI support.
+- Bing search is the most compatible search option on very old devices.
+- Web fetch and some modern providers may require a newer Android release or Wolfius.
+
+## Screenshots
+
+<details>
+  <summary>Show screenshots</summary>
+  <br>
+  <img src="img/scr1.png" alt="numAi conversation" width="200">
+  <img src="img/scr2.png" alt="numAi settings" width="200">
+  <img src="img/scr3.png" alt="numAi image input" width="200">
+  <img src="img/scr4.png" alt="numAi reasoning" width="200">
+  <img src="img/scr5.png" alt="numAi Markdown" width="200">
+  <img src="img/scr6.png" alt="numAi web search" width="200">
+  <img src="img/scr7.png" alt="numAi model selection" width="200">
+  <img src="img/scr8.png" alt="numAi legacy Android" width="200">
+</details>
+
+## Build and test
+
+Recommended environment:
+
+- JDK 8
+- Android SDK Platform 25
+- Android Build Tools 25.0.0
+- Android Studio 2.3.2 for legacy-device development
+
+Windows:
+
+```powershell
+.\gradlew.bat test assembleDebug
+```
+
+Linux or macOS:
+
+```bash
+./gradlew test assembleDebug
+```
+
+The debug APK is written to `app/build/outputs/apk/numAi-1.0.0-debug.apk`. Release builds are minified and resource-shrunk, but the generated release APK is unsigned.
+
+The automated tests cover provider mappings, chat-model filtering, provider-specific fallbacks, generation cancellation, model selection, Markdown, MathJax block handling, and alternative streaming response formats.
+
+## Contributing and bug reports
+
+Open an [issue](https://github.com/JOAO2666/numAi/issues) and include:
+
+- Android version and device model
+- numAi version or commit
+- Selected provider and model, without the API key
+- Steps to reproduce the problem
+- Screenshot or sanitized error message
+
+Pull requests should preserve API 1 compatibility and avoid heavy dependencies unless the benefit clearly justifies the APK-size and performance cost.
+
+## Community
+
+- Telegram updates: [@AppDataApps](https://t.me/AppDataApps)
+- Telegram group: [Retro Android Group](https://t.me/retroandroidgroup)
+- Discord: [Android Afterlife](https://discord.gg/2JqfEkQyck)
+- 4PDA: [numAi topic](https://4pda.to/forum/index.php?showtopic=1116157)
 
 ## Acknowledgments
-* [How-to-develop-and-backport-for-Android-2.1-in-2020](https://github.com/Mik-el/How-to-develop-and-backport-for-Android-2.1-in-2020) project template by Michele
-* [NNJSON](https://github.com/shinovon/NNJSON) library by nnproject
-* [ReOldAI by YMP Yuri](https://github.com/YMP-CO/ReOldAi) — Although not used as inspiration or a codebase, this similar app, which utilizes the Gemini API, provided motivation for the project
+
+- [How-to-develop-and-backport-for-Android-2.1-in-2020](https://github.com/Mik-el/How-to-develop-and-backport-for-Android-2.1-in-2020), project template by Michele
+- [NNJSON](https://github.com/shinovon/NNJSON), by nnproject
+- [ReOldAI](https://github.com/YMP-CO/ReOldAi), by YMP Yuri, for motivation around AI clients on older Android devices
+
 ## License
-The **numAi** project is licensed under the Do What The Fuck You Want To Public License, Version 2. See [LICENSE](LICENSE) for details. *If you want, you may credit me in the README of your project.*  
 
-HOWEVER, the NNJSON library is licensed under the MIT license. See [LICENSE-NNJSON](LICENSE-NNJSON) for details.
+numAi is licensed under the Do What The Fuck You Want To Public License, Version 2. See [LICENSE](LICENSE).
 
-The Android robot is reproduced or modified from work created and shared by Google and used according to terms described in the [Creative Commons 3.0 Attribution License](https://creativecommons.org/licenses/by/3.0/).
+The bundled NNJSON library is distributed under the MIT License. See [LICENSE-NNJSON](LICENSE-NNJSON).
+
+The Android robot is reproduced or modified from work created and shared by Google and used according to the [Creative Commons 3.0 Attribution License](https://creativecommons.org/licenses/by/3.0/).
