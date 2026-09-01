@@ -19,22 +19,24 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
-      - name: Set up Java 17 for Android SDK
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-
       - name: Install Android SDK 25
         shell: bash
         run: |
           SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
-          SDKMANAGER="$(find "$SDK_ROOT" -type f -name sdkmanager | head -n 1)"
-          test -n "$SDKMANAGER"
-          chmod +x "$SDKMANAGER"
-          "$SDKMANAGER" --version
-          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-          "$SDKMANAGER" "platform-tools" "platforms;android-25" "build-tools;25.0.0"
+          SDK_TEMP="$RUNNER_TEMP/android-sdk-25"
+          mkdir -p "$SDK_TEMP/platform" "$SDK_TEMP/build-tools"
+          curl -fsSL "https://dl.google.com/android/repository/platform-25_r03.zip" -o "$SDK_TEMP/platform-25.zip"
+          curl -fsSL "https://dl.google.com/android/repository/build-tools_r25-linux.zip" -o "$SDK_TEMP/build-tools-25.zip"
+          echo "00c2c5765e8988504be10a1eb66ed71fcdbd7fe8  $SDK_TEMP/platform-25.zip" | sha1sum --check
+          echo "f2bbda60403e75cabd0f238598c3b4dfca56ea44  $SDK_TEMP/build-tools-25.zip" | sha1sum --check
+          unzip -q "$SDK_TEMP/platform-25.zip" -d "$SDK_TEMP/platform"
+          unzip -q "$SDK_TEMP/build-tools-25.zip" -d "$SDK_TEMP/build-tools"
+          mkdir -p "$SDK_ROOT/platforms/android-25" "$SDK_ROOT/build-tools/25.0.0"
+          cp -a "$SDK_TEMP/platform/android-7.1.1/." "$SDK_ROOT/platforms/android-25/"
+          cp -a "$SDK_TEMP/build-tools/android-7.1.1/." "$SDK_ROOT/build-tools/25.0.0/"
+          chmod -R a+rX "$SDK_ROOT/platforms/android-25" "$SDK_ROOT/build-tools/25.0.0"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
 
       - name: Set up Java 8 for Gradle
         uses: actions/setup-java@v5
