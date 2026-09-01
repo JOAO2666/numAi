@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="artifacts/numAi-1.0.0-debug.apk?raw=1"><strong>Baixar o último APK de desenvolvimento publicado (1.0.0)</strong></a>
+  <a href="https://github.com/JOAO2666/numAi/releases/download/v2.0.0/numAi-2.0-debug.apk"><strong>Baixar o APK do numAi 2.0</strong></a>
   ·
   <a href="https://github.com/JOAO2666/numAi/releases">Versões publicadas</a>
   ·
@@ -72,7 +72,7 @@ Também é possível informar um endereço personalizado. Para compatibilidade c
 
 ## Instalação
 
-1. Baixe o arquivo [`numAi-1.0.0-debug.apk`](artifacts/numAi-1.0.0-debug.apk?raw=1).
+1. Baixe o arquivo [`numAi-2.0-debug.apk`](https://github.com/JOAO2666/numAi/releases/download/v2.0.0/numAi-2.0-debug.apk).
 2. Transfira o APK para o aparelho Android.
 3. Permita a instalação de fontes desconhecidas quando o Android solicitar.
 4. Instale ou atualize o numAi.

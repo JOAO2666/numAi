@@ -77,11 +77,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v2.0-dev-{0}', github.run_number) }}
         run: |
+          RELEASE_FLAGS=()
+          case "$RELEASE_TAG" in
+            *-dev.*|*-dev-*|*-alpha.*|*-beta.*|*-rc.*) RELEASE_FLAGS+=(--prerelease) ;;
+          esac
           gh release create "$RELEASE_TAG" \
             numAi-2.0-debug.apk \
             numAi-2.0-debug.apk.sha256 \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "numAi 2.0" \
-            --notes "numAi 2.0: integração MCP configurável com OAuth ou credencial Bearer, ativação independente e execução automática opcional. APK de desenvolvimento assinado com a chave de depuração." \
-            --prerelease
+            --notes "numAi 2.0: configurable MCP integration with OAuth or a Bearer credential, independent enable/disable control, and optional automatic tool execution. Development APK signed with the debug key." \
+            "${RELEASE_FLAGS[@]}"

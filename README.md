@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="artifacts/numAi-1.0.0-debug.apk?raw=1"><strong>Download the last published development APK (1.0.0)</strong></a>
+  <a href="https://github.com/JOAO2666/numAi/releases/download/v2.0.0/numAi-2.0-debug.apk"><strong>Download numAi 2.0 APK</strong></a>
   ·
   <a href="https://github.com/JOAO2666/numAi/releases">Releases</a>
   ·
@@ -72,7 +72,7 @@ You can also enter a custom base URL. The service must expose OpenAI-style `/mod
 
 ## Install
 
-1. Download [`numAi-1.0.0-debug.apk`](artifacts/numAi-1.0.0-debug.apk?raw=1).
+1. Download [`numAi-2.0-debug.apk`](https://github.com/JOAO2666/numAi/releases/download/v2.0.0/numAi-2.0-debug.apk).
 2. Transfer it to the Android device.
 3. Allow installation from unknown sources when Android asks.
 4. Install or update numAi.
