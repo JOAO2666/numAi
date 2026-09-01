@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="artifacts/numAi-1.0.0-debug.apk?raw=1"><strong>Baixar o APK de desenvolvimento mais recente</strong></a>
+  <a href="artifacts/numAi-1.0.0-debug.apk?raw=1"><strong>Baixar o último APK de desenvolvimento publicado (1.0.0)</strong></a>
   ·
   <a href="https://github.com/JOAO2666/numAi/releases">Versões publicadas</a>
   ·
@@ -37,6 +37,7 @@ O numAi leva conversas com inteligências artificiais modernas desde o primeiro 
 - Prompt de sistema e endereço de API personalizados
 - Importação de chave de API por arquivo
 - Nova tentativa automática quando um modelo rejeita ferramentas ou opções de raciocínio
+- Ferramentas MCP remotas com OAuth 2.0/PKCE e endereço configurável
 
 As fórmulas continuam legíveis mesmo quando o MathJax não consegue carregar. Fórmulas longas podem ser roladas horizontalmente, sem sair da tela.
 
@@ -46,6 +47,7 @@ O aplicativo possui configurações prontas para:
 
 | Provedor | Endereço base |
 |---|---|
+| numAi Oracle | `https://129-148-23-167.nip.io/v1` |
 | VoidAI | `https://api.voidai.app/v1` |
 | Ollama Cloud | `https://ollama.com/v1` |
 | OpenCode Zen | `https://opencode.ai/zen/v1` |
@@ -88,12 +90,17 @@ O APK de desenvolvimento usa uma assinatura de depuração. Pacotes estáveis, q
 
 Escolha um modelo com visão antes de anexar imagens. Caso um provedor rejeite as ferramentas de pesquisa ou opções específicas de raciocínio, o numAi tenta novamente com uma solicitação mais simples e compatível.
 
+### Ferramentas MCP
+
+As Configurações incluem uma conexão MCP configurável. Informe o endereço completo, seguindo o exemplo `https://example.com/mcp`, e autentique com **OAuth** ou com um token/senha Bearer opcional. Marque **Ativar ferramentas MCP nas conversas** para disponibilizar a conexão. Marque também **Executar ferramentas automaticamente** para permitir que o modelo execute as ferramentas sem pedir confirmação a cada ação. Quando essa segunda opção estiver desmarcada, nenhuma ferramenta MCP é enviada ao modelo. Conecte somente servidores em que você confia.
+
 ## Segurança das chaves
 
 - Crie uma chave exclusiva para o numAi sempre que o provedor permitir.
 - Nunca envie chaves ao GitHub, em relatórios de erro ou em capturas de tela.
 - Revogue e substitua imediatamente qualquer chave exposta.
 - As chaves ficam armazenadas localmente e separadas por provedor.
+- Tokens OAuth e tokens/senhas Bearer do MCP ficam em preferências separadas e nunca são usados como chaves da API de conversa.
 - Use HTTPS em todos os endereços personalizados.
 
 ## Observações para Android antigo
@@ -140,9 +147,9 @@ Linux ou macOS:
 ./gradlew test assembleDebug
 ```
 
-O APK será criado em `app/build/outputs/apk/numAi-1.0.0-debug.apk`. A versão release passa por redução de código e recursos, mas o APK release gerado não é assinado.
+O APK será criado em `app/build/outputs/apk/numAi-2.0-debug.apk`. A versão release passa por redução de código e recursos, mas o APK release gerado não é assinado.
 
-Os testes cobrem provedores, filtragem de modelos, recuperação de incompatibilidades, cancelamento de geração, seleção de modelos, Markdown, MathJax e diferentes formatos de streaming.
+Os testes cobrem provedores, mapeamento de nomes e normalização de resultados MCP, filtragem de modelos, recuperação de incompatibilidades, cancelamento de geração, seleção de modelos, Markdown, MathJax e diferentes formatos de streaming.
 
 ## Contribuições e problemas
 

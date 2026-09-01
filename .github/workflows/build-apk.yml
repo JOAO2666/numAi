@@ -1,11 +1,9 @@
-name: Build test APK
+name: Build numAi APK
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/build-apk.yml
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -13,7 +11,7 @@ permissions:
 
 jobs:
   build-apk:
-    name: Build Android test APK
+    name: Test and build Android APK
     runs-on: ubuntu-22.04
     timeout-minutes: 30
 
@@ -33,46 +31,44 @@ jobs:
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
           sdkmanager "platform-tools" "platforms;android-25" "build-tools;25.0.0"
 
-      - name: Configure separate test package
-        shell: bash
-        run: |
-          sed -i 's/applicationId "io.github.gohoski.numai"/applicationId "io.github.gohoski.numai.multipleimages"/' app/build.gradle
-          grep 'applicationId "io.github.gohoski.numai.multipleimages"' app/build.gradle
-
-      - name: Build debug APK
+      - name: Run tests and build debug APK
         shell: bash
         env:
           GRADLE_OPTS: -Dorg.gradle.daemon=false -Dhttps.protocols=TLSv1.2
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew test assembleDebug --no-daemon --stacktrace
 
       - name: Prepare APK file
         shell: bash
         run: |
-          APK_PATH="$(find app/build/outputs/apk -type f -name '*.apk' | head -n 1)"
+          APK_PATH="$(find app/build/outputs/apk -type f -name '*-debug.apk' | head -n 1)"
           test -n "$APK_PATH"
-          cp "$APK_PATH" numAi-multiple-images-debug.apk
-          ls -lh numAi-multiple-images-debug.apk
+          cp "$APK_PATH" numAi-2.0-debug.apk
+          sha256sum numAi-2.0-debug.apk > numAi-2.0-debug.apk.sha256
+          ls -lh numAi-2.0-debug.apk numAi-2.0-debug.apk.sha256
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: numAi-multiple-images-apk
-          path: numAi-multiple-images-debug.apk
+          name: numAi-2.0-apk
+          path: |
+            numAi-2.0-debug.apk
+            numAi-2.0-debug.apk.sha256
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish GitHub prerelease
+      - name: Publish GitHub release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: numAi-multiple-images-${{ github.run_number }}
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v2.0-dev-{0}', github.run_number) }}
         run: |
           gh release create "$RELEASE_TAG" \
-            numAi-multiple-images-debug.apk \
+            numAi-2.0-debug.apk \
+            numAi-2.0-debug.apk.sha256 \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "numAi teste - selecao multipla (build $GITHUB_RUN_NUMBER)" \
-            --notes "APK de teste com selecao de varias imagens. Ele usa um identificador separado e pode ser instalado ao lado do numAi original." \
+            --title "numAi 2.0" \
+            --notes "numAi 2.0: integração MCP configurável com OAuth ou credencial Bearer, ativação independente e execução automática opcional. APK de desenvolvimento assinado com a chave de depuração." \
             --prerelease

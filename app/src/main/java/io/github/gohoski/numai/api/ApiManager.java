@@ -13,6 +13,8 @@ public class ApiManager {
             URL_TO_ID = new LinkedHashMap<String, String>();
 
     static {
+        addApi("numAi Oracle", "numai_oracle",
+                "https://129-148-23-167.nip.io/v1");
         addApi("VoidAI", "voidai", "https://api.voidai.app/v1");
         addApi("Ollama Cloud", "ollama_cloud", "https://ollama.com/v1");
         addApi("OpenCode Zen", "opencode_zen", "https://opencode.ai/zen/v1");

@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="artifacts/numAi-1.0.0-debug.apk?raw=1"><strong>Download the latest development APK</strong></a>
+  <a href="artifacts/numAi-1.0.0-debug.apk?raw=1"><strong>Download the last published development APK (1.0.0)</strong></a>
   ·
   <a href="https://github.com/JOAO2666/numAi/releases">Releases</a>
   ·
@@ -37,6 +37,7 @@ numAi brings modern AI chat to devices ranging from the first Android release to
 - Custom system prompt and custom OpenAI-compatible base URL
 - Import an API key from a local file
 - Automatic compatibility fallback when a model rejects tools or reasoning options
+- Remote MCP tools over OAuth 2.0/PKCE, with configurable server URL
 
 Math formulas remain readable even when MathJax cannot load. Long display formulas can be scrolled horizontally instead of overflowing the screen.
 
@@ -46,6 +47,7 @@ The app currently includes presets for these OpenAI-compatible services:
 
 | Provider | Base URL |
 |---|---|
+| numAi Oracle | `https://129-148-23-167.nip.io/v1` |
 | VoidAI | `https://api.voidai.app/v1` |
 | Ollama Cloud | `https://ollama.com/v1` |
 | OpenCode Zen | `https://opencode.ai/zen/v1` |
@@ -88,12 +90,17 @@ The development APK is signed with a debug certificate. Stable packages, when av
 
 Choose a vision-capable model before attaching images. If a provider rejects web tools or provider-specific reasoning controls, numAi automatically retries with a simpler compatible request.
 
+### MCP tools
+
+Settings includes a configurable MCP connection. Enter the full address using `https://example.com/mcp` as a guide, then authenticate with **OAuth** or an optional Bearer token/password. Check **Enable MCP tools in chats** to make the connection available. Also check **Run tools automatically** to let the model execute tools without asking for confirmation for each action. When the second option is unchecked, MCP tools are not sent to the model. Connect only to servers you trust.
+
 ## API-key safety
 
 - Create a separate key for numAi whenever the provider allows it.
 - Never commit keys to Git, paste them into bug reports, or publish screenshots containing them.
 - Revoke and replace a key immediately if it is exposed.
 - Keys are stored locally and separately for each provider.
+- MCP OAuth tokens and Bearer tokens/passwords are stored locally in a separate preferences file and are never used as chat API keys.
 - Prefer HTTPS for every custom endpoint.
 
 ## Legacy Android notes
@@ -140,9 +147,9 @@ Linux or macOS:
 ./gradlew test assembleDebug
 ```
 
-The debug APK is written to `app/build/outputs/apk/numAi-1.0.0-debug.apk`. Release builds are minified and resource-shrunk, but the generated release APK is unsigned.
+The debug APK is written to `app/build/outputs/apk/numAi-2.0-debug.apk`. Release builds are minified and resource-shrunk, but the generated release APK is unsigned.
 
-The automated tests cover provider mappings, chat-model filtering, provider-specific fallbacks, generation cancellation, model selection, Markdown, MathJax block handling, and alternative streaming response formats.
+The automated tests cover provider mappings, MCP tool-name mapping and result normalization, chat-model filtering, provider-specific fallbacks, generation cancellation, model selection, Markdown, MathJax block handling, and alternative streaming response formats.
 
 ## Contributing and bug reports
 

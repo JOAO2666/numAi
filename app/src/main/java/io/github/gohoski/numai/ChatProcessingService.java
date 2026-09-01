@@ -28,6 +28,11 @@ import io.github.gohoski.numai.model.Chat;
 import io.github.gohoski.numai.model.Message;
 import io.github.gohoski.numai.model.ProviderSnapshot;
 import io.github.gohoski.numai.model.Role;
+import io.github.gohoski.numai.mcp.McpCatalog;
+import io.github.gohoski.numai.mcp.McpClient;
+import io.github.gohoski.numai.mcp.McpConfigManager;
+import io.github.gohoski.numai.mcp.McpSettings;
+import io.github.gohoski.numai.mcp.McpTool;
 import io.github.gohoski.numai.util.OpenAiDelta;
 import io.github.gohoski.numai.search.SearchEngine;
 import io.github.gohoski.numai.search.SearchManager;
@@ -58,6 +63,9 @@ public class ChatProcessingService extends Service {
     private static final String EXTRA_SEARCH_ENGINE = "search_engine";
     private static final String EXTRA_WEB_FETCH = "web_fetch";
     private static final String EXTRA_DISABLE_TOOLS_IMAGE = "disable_tools_image";
+    private static final String EXTRA_MCP_ENABLED = "mcp_enabled";
+    private static final String EXTRA_MCP_AUTO_EXECUTE = "mcp_auto_execute";
+    private static final String EXTRA_MCP_ENDPOINT = "mcp_endpoint";
     private static final int NOTIFICATION_ID = 2666;
     private static final int MAX_TOOL_ROUNDS = 3;
     private static final long STREAM_PERSIST_INTERVAL_MS = 1000L;
@@ -86,6 +94,10 @@ public class ChatProcessingService extends Service {
         intent.putExtra(EXTRA_SEARCH_ENGINE, snapshot.getSearchEngine());
         intent.putExtra(EXTRA_WEB_FETCH, snapshot.isWebFetchEnabled());
         intent.putExtra(EXTRA_DISABLE_TOOLS_IMAGE, snapshot.isDisableToolsWithImage());
+        McpSettings mcp = McpConfigManager.getInstance(context).createSnapshot();
+        intent.putExtra(EXTRA_MCP_ENABLED, mcp.isEnabled());
+        intent.putExtra(EXTRA_MCP_AUTO_EXECUTE, mcp.isAutoExecute());
+        intent.putExtra(EXTRA_MCP_ENDPOINT, mcp.getEndpoint());
         return intent;
     }
 
@@ -143,14 +155,41 @@ public class ChatProcessingService extends Service {
             return;
         }
         chatManager.ensureMessagesLoaded(this, chat);
+        GenerationContext generationContext = new GenerationContext(snapshotFrom(intent));
+        boolean toolsDisabledForImage = generationContext.providerSnapshot
+                .isDisableToolsWithImage() && hasInputImage(chat);
+        if (intent.getBooleanExtra(EXTRA_MCP_ENABLED, false) &&
+                intent.getBooleanExtra(EXTRA_MCP_AUTO_EXECUTE, false) &&
+                !toolsDisabledForImage) {
+            try {
+                generationContext.mcpClient = new McpClient(this,
+                        intent.getStringExtra(EXTRA_MCP_ENDPOINT));
+                generationContext.mcpCatalog = generationContext.mcpClient.listTools();
+            } catch (Exception error) {
+                addPreparationError(chat, generation, error);
+                finish(generation);
+                return;
+            }
+        }
 
-        requestCompletion(intent, generation, chat,
+        requestCompletion(intent, generation, chat, generationContext,
                 intent.getBooleanExtra(EXTRA_THINKING, false), 0);
+    }
+
+    private static boolean hasInputImage(Chat chat) {
+        if (chat == null || chat.getMessages() == null) return false;
+        List<Message> messages = chat.getMessages();
+        for (int i = 0; i < messages.size(); i++) {
+            List<String> images = messages.get(i).getInputImages();
+            if (images != null && !images.isEmpty()) return true;
+        }
+        return false;
     }
 
     private void requestCompletion(final Intent intent,
             final GenerationRegistry.Generation generation, final Chat chat,
-            final boolean thinking, final int toolRound) {
+            final GenerationContext generationContext, final boolean thinking,
+            final int toolRound) {
         if (generation.isCancelled()) {
             finish(generation);
             return;
@@ -165,10 +204,12 @@ public class ChatProcessingService extends Service {
         chat.getMessages().add(assistant);
         chatManager.onMessageAdded(this, chat);
 
-        final ProviderSnapshot snapshot = snapshotFrom(intent);
+        final ProviderSnapshot snapshot = generationContext.providerSnapshot;
         ApiService api = new ApiService(this);
         api.chatCompletion(requestMessages,
                 thinking, snapshot,
+                generationContext.mcpCatalog == null ? null :
+                        generationContext.mcpCatalog.toOpenAiTools(),
                 new ApiCallback<ApiResult>() {
                     public void onSuccess(final ApiResult result) {
                         generation.setStream(result.getResult());
@@ -179,7 +220,8 @@ public class ChatProcessingService extends Service {
                         executor.submit(new Runnable() {
                             public void run() {
                                 consume(intent, generation, chat, assistant,
-                                        result.getResult(), thinking, snapshot, toolRound);
+                                        result.getResult(), thinking, generationContext,
+                                        toolRound);
                             }
                         });
                     }
@@ -199,7 +241,7 @@ public class ChatProcessingService extends Service {
 
     private void consume(Intent intent, GenerationRegistry.Generation generation,
             Chat chat, Message assistant, InputStream stream, boolean thinkingEnabled,
-            ProviderSnapshot snapshot, int toolRound) {
+            GenerationContext generationContext, int toolRound) {
         StringBuilder content = new StringBuilder();
         StringBuilder thinking = new StringBuilder();
         boolean hasThinking = false;
@@ -250,7 +292,7 @@ public class ChatProcessingService extends Service {
             if (currentChat != null) chatManager.onMessageAdded(this, currentChat);
             if (!generation.isCancelled() && !streamToolCalls.isEmpty()) {
                 handedOffToNextRequest = executeToolCalls(intent, generation, chat, assistant, streamToolCalls,
-                        thinkingEnabled, snapshot, toolRound);
+                        thinkingEnabled, generationContext, toolRound);
                 return;
             }
         } catch (Exception error) {
@@ -294,8 +336,9 @@ public class ChatProcessingService extends Service {
 
     private boolean executeToolCalls(Intent intent,
             GenerationRegistry.Generation generation, Chat chat, Message assistant,
-            List<StreamToolCall> calls, boolean thinking, ProviderSnapshot snapshot,
-            int toolRound) {
+            List<StreamToolCall> calls, boolean thinking,
+            GenerationContext generationContext, int toolRound) {
+        ProviderSnapshot snapshot = generationContext.providerSnapshot;
         JSONArray toolCallsJson = new JSONArray();
         List<StreamToolCall> executable = new ArrayList<StreamToolCall>();
         for (int i = 0; i < calls.size(); i++) {
@@ -310,7 +353,9 @@ public class ChatProcessingService extends Service {
             callJson.put("function", functionJson);
             toolCallsJson.add(callJson);
             if (("web_search".equals(call.name) && snapshot.isWebSearchEnabled()) ||
-                    ("web_fetch".equals(call.name) && snapshot.isWebFetchEnabled())) {
+                    ("web_fetch".equals(call.name) && snapshot.isWebFetchEnabled()) ||
+                    (generationContext.mcpCatalog != null &&
+                            generationContext.mcpCatalog.containsMappedName(call.name))) {
                 executable.add(call);
             }
         }
@@ -338,9 +383,11 @@ public class ChatProcessingService extends Service {
             if ("web_search".equals(call.name)) {
                 resultText = executeSearch(searchEngine, call);
                 totalResults += countSearchResults(resultText);
-            } else {
+            } else if ("web_fetch".equals(call.name)) {
                 resultText = executeFetch(webFetcher, call);
                 if (resultText.length() > 0 && !resultText.startsWith("Error:")) totalResults++;
+            } else {
+                resultText = executeMcp(generationContext, call);
             }
             Message toolMessage = new Message(Role.TOOL, resultText);
             toolMessage.setToolCallId(call.id);
@@ -353,8 +400,33 @@ public class ChatProcessingService extends Service {
             finish(generation);
             return false;
         }
-        requestCompletion(intent, generation, chat, thinking, toolRound + 1);
+        requestCompletion(intent, generation, chat, generationContext, thinking,
+                toolRound + 1);
         return true;
+    }
+
+    private String executeMcp(GenerationContext generationContext, StreamToolCall call) {
+        try {
+            McpTool tool = generationContext.mcpCatalog.getByMappedName(call.name);
+            JSONObject arguments = call.arguments.length() == 0 ? new JSONObject() :
+                    JSON.getObject(call.arguments.toString());
+            return generationContext.mcpClient.callTool(tool, arguments);
+        } catch (Exception error) {
+            return errorJson(error);
+        }
+    }
+
+    private void addPreparationError(Chat chat,
+            GenerationRegistry.Generation generation, Exception error) {
+        String detail = error == null || error.getMessage() == null ?
+                getString(R.string.mcp_unavailable) : error.getMessage();
+        Message message = new Message(Role.ASSISTANT,
+                getString(R.string.mcp_unavailable_detail, detail), getString(R.string.error));
+        message.setAsError();
+        message.setChatId(chat.getId());
+        message.setGenerationId(generation.getGenerationId());
+        chat.getMessages().add(message);
+        chatManager.onMessageAdded(this, chat);
     }
 
     private String executeSearch(SearchEngine engine, StreamToolCall call) {
@@ -418,6 +490,16 @@ public class ChatProcessingService extends Service {
         private String id;
         private String name;
         private final StringBuilder arguments = new StringBuilder();
+    }
+
+    private static class GenerationContext {
+        final ProviderSnapshot providerSnapshot;
+        McpClient mcpClient;
+        McpCatalog mcpCatalog;
+
+        GenerationContext(ProviderSnapshot providerSnapshot) {
+            this.providerSnapshot = providerSnapshot;
+        }
     }
 
     private void finish(GenerationRegistry.Generation generation) {

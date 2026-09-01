@@ -12,6 +12,8 @@ import static org.junit.Assert.assertTrue;
 
 public class ApiManagerTest {
     @Test public void newOpenAiCompatibleProvidersHaveExpectedBaseUrls() {
+        assertEquals("https://129-148-23-167.nip.io/v1",
+                ApiManager.getUrlByName("numAi Oracle"));
         assertEquals("https://integrate.api.nvidia.com/v1",
                 ApiManager.getUrlByName("NVIDIA NIM"));
         assertEquals("https://api.tokenrouter.com/v1",

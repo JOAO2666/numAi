@@ -184,7 +184,7 @@ public class ApiClient {
         }
     }
 
-    String executeAsString(ApiRequest request) throws ApiError {
+    public String executeAsString(ApiRequest request) throws ApiError {
         try {
             ApiResponse response = execute(request);
             return readInputStreamToString(response.getBody());
@@ -195,7 +195,7 @@ public class ApiClient {
         }
     }
 
-    String readInputStreamToString(InputStream inputStream) throws IOException {
+    public String readInputStreamToString(InputStream inputStream) throws IOException {
         if (inputStream == null) {
             return "";
         }
@@ -218,7 +218,7 @@ public class ApiClient {
     }
 
     /** Joins provider URLs safely when a user pasted a trailing slash. */
-    static String joinUrl(String baseUrl, String endpoint) {
+    public static String joinUrl(String baseUrl, String endpoint) {
         String base = baseUrl == null ? "" : baseUrl.trim();
         String path = endpoint == null ? "" : endpoint.trim();
         if (base.length() == 0) return path;
@@ -245,6 +245,7 @@ public class ApiClient {
         if (name == null) return false;
         String lower = name.toLowerCase();
         return "authorization".equals(lower) || "cookie".equals(lower) ||
-                lower.contains("api-key") || lower.contains("apikey");
+                lower.contains("api-key") || lower.contains("apikey") ||
+                lower.startsWith("mcp-param-") || "mcp-session-id".equals(lower);
     }
 }

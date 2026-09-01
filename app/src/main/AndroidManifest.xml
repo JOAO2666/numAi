@@ -22,7 +22,18 @@
         <activity android:name=".FirstTimeActivity"/>
         <activity
             android:name=".SettingsActivity"
-            android:windowSoftInputMode="stateHidden"/>
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="stateHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="io.github.gohoski.numai"
+                    android:host="oauth"
+                    android:path="/mcp" />
+            </intent-filter>
+        </activity>
         <service
             android:name=".ChatProcessingService"
             android:exported="false" />

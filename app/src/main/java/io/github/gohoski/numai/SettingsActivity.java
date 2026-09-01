@@ -16,9 +16,11 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.InputStream;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Scanner;
 
@@ -30,6 +32,10 @@ import io.github.gohoski.numai.api.GeminiImageService;
 import io.github.gohoski.numai.data.ConfigManager;
 import io.github.gohoski.numai.model.Config;
 import io.github.gohoski.numai.model.ModelInfo;
+import io.github.gohoski.numai.mcp.McpAuthManager;
+import io.github.gohoski.numai.mcp.McpCatalog;
+import io.github.gohoski.numai.mcp.McpClient;
+import io.github.gohoski.numai.mcp.McpConfigManager;
 import io.github.gohoski.numai.ui.Loading;
 import io.github.gohoski.numai.ui.ModelPickerDialog;
 import io.github.gohoski.numai.ui.SettingsHelper;
@@ -53,6 +59,12 @@ public class SettingsActivity extends Activity {
     String systemPrompt;
     EditText updateDelay, geminiImageKey, geminiImageModel;
     Button fetchGeminiImageModels;
+    McpConfigManager mcpConfig;
+    McpAuthManager mcpAuth;
+    EditText mcpEndpoint, mcpCredential;
+    CheckBox mcpEnabled, mcpAutoExecute;
+    Button mcpConnect, mcpUseCredential, mcpDisconnect;
+    TextView mcpStatus;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -150,6 +162,8 @@ public class SettingsActivity extends Activity {
             }
         });
 
+        setupMcp();
+
         // Restore saved instance state on rotation
         if (savedInstanceState != null) {
             if (savedInstanceState.containsKey("api_key") && keyText != null) {
@@ -166,6 +180,15 @@ public class SettingsActivity extends Activity {
             }
             if (savedInstanceState.containsKey("gemini_image_model") && geminiImageModel != null) {
                 geminiImageModel.setText(savedInstanceState.getString("gemini_image_model"));
+            }
+            if (savedInstanceState.containsKey("mcp_endpoint") && mcpEndpoint != null) {
+                mcpEndpoint.setText(savedInstanceState.getString("mcp_endpoint"));
+            }
+            if (savedInstanceState.containsKey("mcp_enabled") && mcpEnabled != null) {
+                mcpEnabled.setChecked(savedInstanceState.getBoolean("mcp_enabled"));
+            }
+            if (savedInstanceState.containsKey("mcp_auto_execute") && mcpAutoExecute != null) {
+                mcpAutoExecute.setChecked(savedInstanceState.getBoolean("mcp_auto_execute"));
             }
             if (savedInstanceState.containsKey("shrink_think") && shrinkThink != null) {
                 shrinkThink.setChecked(savedInstanceState.getBoolean("shrink_think"));
@@ -210,6 +233,7 @@ public class SettingsActivity extends Activity {
                 final int selectedUpdateDelay = readUpdateDelay();
                 if (selectedUpdateDelay < 0) return;
                 saveGeminiImageSettings();
+                if (!saveMcpSettings()) return;
                 final String urlByName = ApiManager.getUrlByName(apiSpinner.getSelectedItem().toString());
                 final String selectedProviderId = ApiManager.getIdByUrl(urlByName);
                 config.selectProvider(selectedProviderId, urlByName);
@@ -308,6 +332,216 @@ public class SettingsActivity extends Activity {
                 startActivityForResult(Intent.createChooser(intent, getString(R.string.select_txt)), 2);
             }
         });
+        handleMcpIntent(getIntent());
+    }
+
+    private void setupMcp() {
+        mcpConfig = McpConfigManager.getInstance(this);
+        mcpAuth = new McpAuthManager(this);
+        mcpEndpoint = (EditText) findViewById(R.id.mcp_endpoint);
+        mcpCredential = (EditText) findViewById(R.id.mcp_credential);
+        mcpEnabled = (CheckBox) findViewById(R.id.mcp_enabled);
+        mcpAutoExecute = (CheckBox) findViewById(R.id.mcp_auto_execute);
+        mcpConnect = (Button) findViewById(R.id.mcp_connect);
+        mcpUseCredential = (Button) findViewById(R.id.mcp_use_credential);
+        mcpDisconnect = (Button) findViewById(R.id.mcp_disconnect);
+        mcpStatus = (TextView) findViewById(R.id.mcp_status);
+        mcpEndpoint.setText(mcpConfig.getEndpoint());
+        mcpCredential.setText(mcpConfig.getServerCredential());
+        mcpEnabled.setChecked(mcpConfig.isEnabled());
+        mcpAutoExecute.setChecked(mcpConfig.isAutoExecute());
+
+        mcpAutoExecute.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View view) {
+                if (mcpAutoExecute.isChecked() && !mcpConfig.isWarningAccepted()) {
+                    new AlertDialog.Builder(SettingsActivity.this)
+                            .setTitle(R.string.mcp_auto_title)
+                            .setMessage(R.string.mcp_auto_warning)
+                            .setPositiveButton(android.R.string.ok,
+                                    new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialog, int which) {
+                                    mcpConfig.setWarningAccepted(true);
+                                }
+                            })
+                            .setNegativeButton(android.R.string.cancel,
+                                    new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialog, int which) {
+                                    mcpAutoExecute.setChecked(false);
+                                }
+                            }).show();
+                }
+            }
+        });
+
+        mcpConnect.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View view) { connectMcp(); }
+        });
+        mcpUseCredential.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View view) { connectMcpWithCredential(); }
+        });
+        mcpDisconnect.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View view) {
+                mcpConfig.clearAuthorization();
+                mcpEnabled.setChecked(false);
+                mcpAutoExecute.setChecked(false);
+                mcpCredential.setText("");
+                updateMcpControls(false, getString(R.string.mcp_disconnected));
+            }
+        });
+
+        if (mcpConfig.isConnected()) refreshMcpStatus();
+        else updateMcpControls(false, getString(R.string.mcp_disconnected));
+    }
+
+    private void connectMcp() {
+        String endpoint = mcpEndpoint.getText().toString().trim();
+        if (!validateMcpEndpoint(endpoint)) return;
+        boolean endpointChanged = !endpoint.equals(mcpConfig.getEndpoint());
+        mcpConfig.setEndpoint(endpoint);
+        if (endpointChanged) {
+            mcpEnabled.setChecked(false);
+            mcpAutoExecute.setChecked(false);
+        }
+        mcpConfig.clearServerCredential();
+        mcpCredential.setText("");
+        updateMcpControls(true, getString(R.string.mcp_connecting));
+        mcpAuth.startAuthorization(endpoint, authCallback());
+    }
+
+    private void connectMcpWithCredential() {
+        String endpoint = mcpEndpoint.getText().toString().trim();
+        if (!validateMcpEndpoint(endpoint)) return;
+        String credential = mcpCredential.getText().toString().trim();
+        if (credential.length() == 0) {
+            Toast.makeText(this, R.string.mcp_credential_required,
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        boolean endpointChanged = !endpoint.equals(mcpConfig.getEndpoint());
+        mcpConfig.setEndpoint(endpoint);
+        if (endpointChanged) {
+            mcpEnabled.setChecked(false);
+            mcpAutoExecute.setChecked(false);
+        }
+        mcpConfig.clearOAuthAuthorization();
+        mcpConfig.setServerCredential(credential);
+        refreshMcpStatus();
+    }
+
+    private boolean validateMcpEndpoint(String endpoint) {
+        if (endpoint == null || endpoint.trim().length() == 0) {
+            Toast.makeText(this, R.string.mcp_endpoint_required,
+                    Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        try {
+            URL url = new URL(endpoint);
+            if (!"https".equalsIgnoreCase(url.getProtocol()) ||
+                    url.getHost() == null || url.getHost().length() == 0) {
+                throw new Exception();
+            }
+            return true;
+        } catch (Exception error) {
+            Toast.makeText(this, R.string.bad_url, Toast.LENGTH_SHORT).show();
+            return false;
+        }
+    }
+
+    private McpAuthManager.Callback authCallback() {
+        return new McpAuthManager.Callback() {
+            public void onBrowserOpened() {
+                updateMcpControls(false, getString(R.string.mcp_browser_opened));
+            }
+
+            public void onConnected() {
+                mcpEnabled.setChecked(true);
+                refreshMcpStatus();
+            }
+
+            public void onError(String message) {
+                mcpEnabled.setChecked(false);
+                updateMcpControls(false, getString(R.string.mcp_failed, message));
+            }
+        };
+    }
+
+    private void handleMcpIntent(Intent intent) {
+        if (mcpAuth != null && mcpAuth.isCallback(intent)) {
+            updateMcpControls(true, getString(R.string.mcp_connecting));
+            mcpAuth.handleCallback(intent, authCallback());
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleMcpIntent(intent);
+    }
+
+    private void refreshMcpStatus() {
+        updateMcpControls(true, getString(R.string.mcp_connecting));
+        final String endpoint = mcpConfig.getEndpoint();
+        new Thread(new Runnable() {
+            public void run() {
+                try {
+                    final McpCatalog catalog = new McpClient(SettingsActivity.this,
+                            endpoint).listTools();
+                    runOnUiThread(new Runnable() {
+                        public void run() {
+                            mcpConfig.setEnabled(true);
+                            mcpEnabled.setChecked(true);
+                            updateMcpControls(false,
+                                    getString(R.string.mcp_connected, catalog.size()));
+                        }
+                    });
+                } catch (final Exception error) {
+                    runOnUiThread(new Runnable() {
+                        public void run() {
+                            mcpConfig.setEnabled(false);
+                            mcpEnabled.setChecked(false);
+                            updateMcpControls(false, getString(R.string.mcp_failed,
+                                    error.getMessage() == null ? "MCP error" :
+                                            error.getMessage()));
+                        }
+                    });
+                }
+            }
+        }).start();
+    }
+
+    private void updateMcpControls(boolean busy, String status) {
+        if (mcpStatus != null) mcpStatus.setText(status);
+        if (mcpConnect != null) mcpConnect.setEnabled(!busy);
+        if (mcpUseCredential != null) mcpUseCredential.setEnabled(!busy);
+        if (mcpDisconnect != null) mcpDisconnect.setEnabled(!busy &&
+                mcpConfig != null && mcpConfig.isConnected());
+        if (mcpEnabled != null) mcpEnabled.setEnabled(!busy &&
+                mcpConfig != null && mcpConfig.isConnected());
+        if (mcpAutoExecute != null) mcpAutoExecute.setEnabled(!busy &&
+                mcpConfig != null && mcpConfig.isConnected());
+        if (mcpEndpoint != null) mcpEndpoint.setEnabled(!busy);
+        if (mcpCredential != null) mcpCredential.setEnabled(!busy);
+    }
+
+    private boolean saveMcpSettings() {
+        if (mcpConfig == null || mcpEndpoint == null || mcpEnabled == null ||
+                mcpAutoExecute == null) return true;
+        String endpoint = mcpEndpoint.getText().toString().trim();
+        String credential = mcpCredential == null ? "" :
+                mcpCredential.getText().toString();
+        if ((mcpEnabled.isChecked() || credential.trim().length() > 0) &&
+                !validateMcpEndpoint(endpoint)) return false;
+        mcpConfig.setEndpoint(endpoint);
+        if (mcpCredential != null) {
+            mcpConfig.setServerCredential(credential);
+        }
+        boolean enabled = mcpEnabled.isChecked() && mcpConfig.isConnected();
+        mcpConfig.setEnabled(enabled);
+        mcpConfig.setAutoExecute(enabled && mcpAutoExecute.isChecked());
+        if (!enabled) mcpEnabled.setChecked(false);
+        if (!enabled) mcpAutoExecute.setChecked(false);
+        return true;
     }
 
     @Override
@@ -327,6 +561,15 @@ public class SettingsActivity extends Activity {
         }
         if (geminiImageModel != null) {
             outState.putString("gemini_image_model", geminiImageModel.getText().toString());
+        }
+        if (mcpEndpoint != null) {
+            outState.putString("mcp_endpoint", mcpEndpoint.getText().toString());
+        }
+        if (mcpEnabled != null) {
+            outState.putBoolean("mcp_enabled", mcpEnabled.isChecked());
+        }
+        if (mcpAutoExecute != null) {
+            outState.putBoolean("mcp_auto_execute", mcpAutoExecute.isChecked());
         }
         if (shrinkThink != null) {
             outState.putBoolean("shrink_think", shrinkThink.isChecked());

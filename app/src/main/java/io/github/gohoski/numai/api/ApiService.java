@@ -43,6 +43,13 @@ public class ApiService {
      */
     public void chatCompletion(final List<Message> msg, final boolean thinking,
             final ProviderSnapshot snapshot, final ApiCallback<ApiResult> callback) {
+        chatCompletion(msg, thinking, snapshot, null, callback);
+    }
+
+    /** Adds already-normalized OpenAI-compatible tools for this request. */
+    public void chatCompletion(final List<Message> msg, final boolean thinking,
+            final ProviderSnapshot snapshot, final JSONArray externalTools,
+            final ApiCallback<ApiResult> callback) {
         final ProviderSnapshot requestSnapshot = snapshot == null ?
                 config.createSnapshot() : snapshot;
         new Thread(new Runnable() {
@@ -60,8 +67,7 @@ public class ApiService {
                     body.put("messages", messages);
                     body.put("stream", true);
 
-                    if (!(hasImg && requestSnapshot.isDisableToolsWithImage()) &&
-                            (requestSnapshot.isWebSearchEnabled() || requestSnapshot.isWebFetchEnabled())) {
+                    if (!(hasImg && requestSnapshot.isDisableToolsWithImage())) {
                         JSONArray tools = new JSONArray();
 
                         if (requestSnapshot.isWebSearchEnabled()) {
@@ -118,7 +124,14 @@ public class ApiService {
                             tools.add(fetchTool);
                         }
 
-                        body.put("tools", tools);
+                        if (externalTools != null) {
+                            for (int i = 0; i < externalTools.size(); i++) {
+                                JSONObject external = externalTools.getObject(i);
+                                if (external != null) tools.add(external);
+                            }
+                        }
+
+                        if (tools.size() > 0) body.put("tools", tools);
                     }
 
                     if (thinking) {

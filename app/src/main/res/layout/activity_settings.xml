@@ -110,6 +110,86 @@
             <TextView
                 android:layout_width="fill_parent"
                 android:layout_height="wrap_content"
+                android:text="@string/mcp_settings"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:layout_marginTop="12dp" />
+
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/mcp_settings_desc"
+                android:layout_marginBottom="4dp" />
+
+            <EditText
+                android:id="@+id/mcp_endpoint"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/mcp_endpoint_hint"
+                android:inputType="textUri"
+                android:singleLine="true" />
+
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/mcp_endpoint_example"
+                android:textSize="12sp"
+                android:layout_marginBottom="4dp" />
+
+            <EditText
+                android:id="@+id/mcp_credential"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/mcp_credential_hint"
+                android:inputType="textPassword"
+                android:singleLine="true" />
+
+            <CheckBox
+                android:id="@+id/mcp_enabled"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/mcp_enable" />
+
+            <CheckBox
+                android:id="@+id/mcp_auto_execute"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/mcp_auto_execute" />
+
+            <LinearLayout
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <Button
+                    android:id="@+id/mcp_connect"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="@string/mcp_connect" />
+                <Button
+                    android:id="@+id/mcp_use_credential"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="@string/mcp_use_credential" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/mcp_disconnect"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/mcp_disconnect" />
+
+            <TextView
+                android:id="@+id/mcp_status"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/mcp_disconnected"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
                 android:text="@string/update_delay"
                 android:textSize="16sp"/>
             <EditText

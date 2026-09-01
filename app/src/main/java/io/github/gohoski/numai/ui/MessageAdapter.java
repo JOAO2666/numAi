@@ -127,6 +127,8 @@ public class MessageAdapter extends ArrayAdapter<Message> {
             holder.searchQueries = (TextView) convertView.findViewById(R.id.searchQueries);
             holder.readingLayout = (LinearLayout) convertView.findViewById(R.id.readingLayout);
             holder.readingUrls = (TextView) convertView.findViewById(R.id.readingUrls);
+            holder.mcpLayout = (LinearLayout) convertView.findViewById(R.id.mcpToolsLayout);
+            holder.mcpActions = (TextView) convertView.findViewById(R.id.mcpToolActions);
             holder.response = convertView.findViewById(R.id.response);
             convertView.setTag(holder);
         } else {
@@ -154,6 +156,7 @@ public class MessageAdapter extends ArrayAdapter<Message> {
         JSONArray toolCalls = message.getToolCalls();
         List<String> toolActions = new ArrayList<String>();
         List<String> readingActions = new ArrayList<String>();
+        List<String> mcpActions = new ArrayList<String>();
         if (toolCalls != null) {
             for (int i = 0; i < toolCalls.size(); i++) {
                 try {
@@ -171,6 +174,12 @@ public class MessageAdapter extends ArrayAdapter<Message> {
                             try {
                                 readingActions.add(args.getString("url"));
                             } catch (JSONException e) { e.printStackTrace(); }
+                        } else if (name != null && name.startsWith("mcp_")) {
+                            String shownArgs = argsStr == null ? "{}" : argsStr;
+                            if (shownArgs.length() > 240) {
+                                shownArgs = shownArgs.substring(0, 240) + "…";
+                            }
+                            mcpActions.add(name.substring(4) + " " + shownArgs);
                         }
                     }
                 } catch (Exception ignored) {}
@@ -208,6 +217,18 @@ public class MessageAdapter extends ArrayAdapter<Message> {
             holder.readingUrls.setText(readingText.toString());
         } else {
             holder.readingLayout.setVisibility(View.GONE);
+        }
+
+        if (!mcpActions.isEmpty()) {
+            holder.mcpLayout.setVisibility(View.VISIBLE);
+            StringBuilder mcpText = new StringBuilder();
+            for (int i = 0; i < mcpActions.size(); i++) {
+                if (i > 0) mcpText.append("\n");
+                mcpText.append("• ").append(mcpActions.get(i));
+            }
+            holder.mcpActions.setText(mcpText.toString());
+        } else {
+            holder.mcpLayout.setVisibility(View.GONE);
         }
 
         // Response Box
@@ -297,6 +318,8 @@ public class MessageAdapter extends ArrayAdapter<Message> {
         TextView searchQueries;
         LinearLayout readingLayout;
         TextView readingUrls;
+        LinearLayout mcpLayout;
+        TextView mcpActions;
         View response;
     }
 
