@@ -211,7 +211,10 @@ public class ApiService {
         ApiRequest request = new ApiRequest(snapshot.getBaseUrl(),
                 "/chat/completions", "POST");
         request.setApiKey(snapshot.getApiKey());
-        request.setReadTimeout(40000);
+        // Tool-enabled requests can take longer while the provider evaluates
+        // a large MCP catalog. Keep ordinary requests fast to fail, but allow
+        // up to two minutes when tools are present.
+        request.setReadTimeout(body.has("tools") ? 120000 : 40000);
         request.setBody(body.toString());
         return request;
     }

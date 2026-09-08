@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import cc.nnproject.json.JSON;
+import cc.nnproject.json.JSONArray;
 import cc.nnproject.json.JSONObject;
 import org.junit.Test;
 
@@ -67,5 +68,17 @@ public class McpProtocolTest {
         assertTrue(McpClient.isValidToolName("oracle.sql-query_2"));
         assertFalse(McpClient.isValidToolName("bad tool"));
         assertFalse(McpClient.isValidToolName("bad\r\nHeader"));
+    }
+
+    @Test public void removesSchemaMetadataRecursivelyForOpenAiTools() {
+        JSONObject schema = JSON.getObject("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\"," +
+                "\"type\":\"object\",\"properties\":{\"items\":{\"type\":\"array\",\"items\":[{" +
+                "\"$schema\":\"nested\",\"type\":\"string\"}]}}}");
+        McpClient.sanitizeSchema(schema);
+        assertFalse(schema.has("$schema"));
+        JSONObject items = schema.getNullableObject("properties").getNullableObject("items");
+        JSONArray nested = items.getNullableArray("items");
+        assertFalse(nested.getNullableObject(0).has("$schema"));
+        assertEquals("string", nested.getNullableObject(0).getNullableString("type"));
     }
 }

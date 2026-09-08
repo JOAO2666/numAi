@@ -26,6 +26,7 @@ public class McpClient {
     private static final String MODERN_VERSION = "2026-07-28";
     private static final String LEGACY_VERSION = "2025-11-25";
     private static final int MAX_RESULT_LENGTH = 15000;
+    private static final int MCP_READ_TIMEOUT_MS = 120000;
 
     private final String endpoint;
     private final ApiClient api;
@@ -79,6 +80,11 @@ public class McpClient {
             String name = definition.getNullableString("name");
             if (!isValidToolName(name)) continue;
             JSONObject schema = definition.getNullableObject("inputSchema");
+            // MCP schemas may include the JSON Schema meta-field "$schema".
+            // Some OpenAI-compatible gateways reject that meta-field in a
+            // function tool even though it is valid MCP metadata. Keep the
+            // useful validation properties while removing only that field.
+            sanitizeSchema(schema);
             tools.add(new McpTool(name, McpCatalog.mappedName(name, used),
                     definition.getNullableString("description"), schema));
         }
@@ -205,7 +211,7 @@ public class McpClient {
             Map<String, String> extraHeaders) throws McpException {
         ApiRequest request = new ApiRequest(endpoint, "", "POST");
         request.setApiKey(getAuthorizationToken());
-        request.setReadTimeout(40000);
+        request.setReadTimeout(MCP_READ_TIMEOUT_MS);
         request.addHeader("Accept", "application/json, text/event-stream");
         request.addHeader("Content-Type", "application/json; charset=UTF-8");
         request.addHeader("Mcp-Method", method);
@@ -314,6 +320,35 @@ public class McpClient {
             result.put("Mcp-Param-" + headerName, headerValue(String.valueOf(value)));
         }
         return result;
+    }
+
+    /** Removes JSON Schema declaration metadata rejected by strict tool APIs. */
+    static void sanitizeSchema(JSONObject schema) {
+        if (schema == null) return;
+        List<String> keys = new ArrayList<String>();
+        Enumeration enumeration = schema.keys();
+        while (enumeration.hasMoreElements()) {
+            keys.add(String.valueOf(enumeration.nextElement()));
+        }
+        for (int i = 0; i < keys.size(); i++) {
+            String key = keys.get(i);
+            if ("$schema".equals(key)) {
+                schema.remove(key);
+                continue;
+            }
+            sanitizeSchemaValue(schema.getNullable(key));
+        }
+    }
+
+    private static void sanitizeSchemaValue(Object value) {
+        if (value instanceof JSONObject) {
+            sanitizeSchema((JSONObject) value);
+        } else if (value instanceof JSONArray) {
+            JSONArray array = (JSONArray) value;
+            for (int i = 0; i < array.size(); i++) {
+                sanitizeSchemaValue(array.getNullable(i));
+            }
+        }
     }
 
     static boolean isValidToolName(String name) {
