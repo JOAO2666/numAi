@@ -102,6 +102,10 @@
     <string name="remove_attachment">Удалить вложение</string>
     <string name="preview_attachment">Прикрепленное изображение</string>
     <string name="wait_images_loading">Пожалуйста, дождитесь загрузки изображений...</string>
+    <string name="sending_images">Отправка изображений...</string>
+    <string name="sending_message">Отправка...</string>
+    <string name="images_delivered">Доставлено на сервер</string>
+    <string name="send_failed">Не удалось отправить</string>
     <string name="send_message">Отправить сообщение</string>
     <string name="stop_generation">Остановить генерацию</string>
 </resources>

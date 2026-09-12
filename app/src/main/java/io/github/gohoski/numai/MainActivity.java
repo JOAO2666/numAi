@@ -93,6 +93,7 @@ public class MainActivity extends Activity {
     private ToggleButton imageToggle;
     private ProgressBar progressBar;
     private TextView imgCount;
+    private TextView sendingStatus;
     private boolean autoScroll = true;
     private boolean isGenerating = false;
     private boolean isThinkingState = false;
@@ -174,6 +175,7 @@ public class MainActivity extends Activity {
         thinkingToggle = (ToggleButton) findViewById(R.id.thinking);
         imageToggle = (ToggleButton) findViewById(R.id.image_generation);
         progressBar = (ProgressBar) findViewById(R.id.waiting);
+        sendingStatus = (TextView) findViewById(R.id.sending_status);
         imgCount = (TextView) findViewById(R.id.img_count);
         imgCount.setOnClickListener(new OnClickListener() {
             public void onClick(View view) {
@@ -754,6 +756,7 @@ public class MainActivity extends Activity {
 
                 final boolean finalSuccess = success;
                 final Bitmap finalThumb = thumbBitmap;
+                final long fileSize = success ? getFileStreamPath(fileName).length() : 0;
                 runOnUiThread(new Runnable() {
                     public void run() {
                         pendingImageLoads--;
@@ -772,6 +775,7 @@ public class MainActivity extends Activity {
                             if (previewItem != null) {
                                 ImageView previewImage = (ImageView) previewItem.findViewById(R.id.preview_image);
                                 ProgressBar previewLoading = (ProgressBar) previewItem.findViewById(R.id.preview_loading);
+                                TextView previewSize = (TextView) previewItem.findViewById(R.id.preview_size);
                                 if (previewLoading != null) previewLoading.setVisibility(View.GONE);
                                 if (previewImage != null) {
                                     previewImage.setVisibility(View.VISIBLE);
@@ -781,6 +785,11 @@ public class MainActivity extends Activity {
                                             showImagePreviewDialog(fileName);
                                         }
                                     });
+                                }
+                                if (previewSize != null && fileSize > 0) {
+                                    long kb = (fileSize + 1023) / 1024;
+                                    previewSize.setText(kb + " KB");
+                                    previewSize.setVisibility(View.VISIBLE);
                                 }
                             }
                         } else {
@@ -881,7 +890,8 @@ public class MainActivity extends Activity {
         autoScroll = true;
         currentStream = null;
         final List<String> selectedImages = new ArrayList<String>(inputImages);
-        MessageManager.getInstance().addMessage(new Message(Role.USER, text, selectedImages, null));
+        Message userMessage = new Message(Role.USER, text, selectedImages, null);
+        MessageManager.getInstance().addMessage(userMessage);
         ChatManager.getInstance().onMessageAdded(this);
         input.setText("");
         sendBtn.setImageResource(R.drawable.ic_action_stop);
@@ -889,6 +899,11 @@ public class MainActivity extends Activity {
         input.setEnabled(false);
         attachBtn.setEnabled(false);
         progressBar.setVisibility(View.VISIBLE);
+        if (sendingStatus != null) {
+            sendingStatus.setText(selectedImages.isEmpty() ?
+                    R.string.sending_message : R.string.sending_images);
+            sendingStatus.setVisibility(View.VISIBLE);
+        }
         inputImages.clear();
         imgCount.setVisibility(View.GONE);
         if (previewContainer != null) {
@@ -920,6 +935,9 @@ public class MainActivity extends Activity {
         final Message userMessage = messages.get(messages.size() - 1);
         activeChatId = targetChat.getId();
         activeChatGenerationId = UUID.randomUUID().toString();
+        userMessage.setChatId(activeChatId);
+        userMessage.setGenerationId(activeChatGenerationId);
+        ChatManager.getInstance().onMessageAdded(this, targetChat);
         final ProviderSnapshot snapshot = config.createSnapshot();
         startChatProcessingService(ChatProcessingService.createIntent(this, targetChat,
                 userMessage, snapshot, thinkingEnabled, activeChatGenerationId));
@@ -948,6 +966,22 @@ public class MainActivity extends Activity {
                     adapter.notifyDataSetChanged();
                     updateEmptyState();
                     if (autoScroll) scrollToBottom();
+
+                    if (sendingStatus != null && sendingStatus.getVisibility() == View.VISIBLE) {
+                        List<Message> msgs = targetChat.getMessages();
+                        if (msgs != null && !msgs.isEmpty()) {
+                            Message last = msgs.get(msgs.size() - 1);
+                            if (last != null && last.getRoleEnum() == Role.ASSISTANT) {
+                                String content = last.getContent();
+                                String think = last.getThinkingRaw();
+                                if ((content != null && content.length() > 0) ||
+                                        (think != null && think.length() > 0) ||
+                                        last.getToolCalls() != null) {
+                                    sendingStatus.setVisibility(View.GONE);
+                                }
+                            }
+                        }
+                    }
                 }
                 if (active) {
                     generationHandler.postDelayed(this, UPDATE_DELAY_MS);
@@ -967,8 +1001,19 @@ public class MainActivity extends Activity {
         isGenerating = true;
         isCancelled = false;
         final Chat targetChat = ChatManager.getInstance().getCurrentChat();
+        if (targetChat == null) {
+            resetUIState();
+            return;
+        }
         final String targetChatId = targetChat.getId();
         final int genId = nextImageGenerationId(targetChatId);
+        final List<Message> messages = targetChat.getMessages();
+        if (messages != null && !messages.isEmpty()) {
+            Message userMessage = messages.get(messages.size() - 1);
+            userMessage.setChatId(targetChatId);
+            userMessage.setGenerationId("gemini_img_" + genId);
+            ChatManager.getInstance().onMessageAdded(this, targetChat);
+        }
 
         geminiImageService.generate(prompt, selectedImages, new ApiCallback<GeminiImageResult>() {
             @Override
@@ -1013,6 +1058,43 @@ public class MainActivity extends Activity {
         if (chatId != null) nextImageGenerationId(chatId);
     }
 
+    public synchronized boolean isImageGenerationActive(String chatId, String generationId) {
+        if (chatId == null || generationId == null) return false;
+        if (!generationId.startsWith("gemini_img_")) return false;
+        try {
+            int id = Integer.parseInt(generationId.substring("gemini_img_".length()));
+            return isImageGenerationCurrent(chatId, id) && isGenerating;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public boolean isMessageSending(Message message) {
+        if (message == null) return false;
+        if (!isGenerating) return false;
+        String chatId = message.getChatId();
+        String genId = message.getGenerationId();
+        if (chatId != null && genId != null) {
+            if (ChatProcessingService.isGenerationActive(chatId, genId)) {
+                return true;
+            }
+            if (genId.startsWith("gemini_img_")) {
+                return isImageGenerationActive(chatId, genId);
+            }
+        }
+        Chat current = ChatManager.getInstance().getCurrentChat();
+        if (current != null && current.getMessages() != null) {
+            List<Message> list = current.getMessages();
+            for (int i = list.size() - 1; i >= 0; i--) {
+                Message m = list.get(i);
+                if (m.isSent()) {
+                    return m == message;
+                }
+            }
+        }
+        return false;
+    }
+
     private void saveGeminiImageResult(GeminiImageResult result, Chat targetChat) {
         String mimeType = result.getMimeType();
         boolean isPng = "image/png".equalsIgnoreCase(mimeType);
@@ -1052,6 +1134,16 @@ public class MainActivity extends Activity {
     }
 
     private void handleGenerationError(String message, Chat targetChat) {
+        if (targetChat != null && targetChat.getMessages() != null) {
+            List<Message> list = targetChat.getMessages();
+            for (int i = list.size() - 1; i >= 0; i--) {
+                Message m = list.get(i);
+                if (m.isSent()) {
+                    m.setAsError();
+                    break;
+                }
+            }
+        }
         Message error = new Message(Role.ASSISTANT, message, getString(R.string.error));
         error.setAsError();
         error.setChatId(targetChat.getId());
@@ -1083,6 +1175,9 @@ public class MainActivity extends Activity {
         }
         this.currentStream = stream;
         progressBar.setVisibility(View.GONE);
+        if (sendingStatus != null) {
+            sendingStatus.setVisibility(View.GONE);
+        }
         final Message msg = new Message(Role.ASSISTANT, "", model);
         MessageManager.getInstance().addMessage(msg);
         ChatManager.getInstance().onMessageAdded(this);
@@ -1104,6 +1199,20 @@ public class MainActivity extends Activity {
 
     private void handleStreamError(String errorMsg) {
         progressBar.setVisibility(View.GONE);
+        if (sendingStatus != null) {
+            sendingStatus.setVisibility(View.GONE);
+        }
+        Chat currentChat = ChatManager.getInstance().getCurrentChat();
+        if (currentChat != null && currentChat.getMessages() != null) {
+            List<Message> list = currentChat.getMessages();
+            for (int i = list.size() - 1; i >= 0; i--) {
+                Message m = list.get(i);
+                if (m.isSent()) {
+                    m.setAsError();
+                    break;
+                }
+            }
+        }
         Message error = new Message(Role.ASSISTANT, errorMsg, getString(R.string.error));
         error.setAsError();
         MessageManager.getInstance().addMessage(error);
@@ -1122,6 +1231,9 @@ public class MainActivity extends Activity {
         input.setEnabled(true);
         attachBtn.setEnabled(true);
         progressBar.setVisibility(View.GONE);
+        if (sendingStatus != null) {
+            sendingStatus.setVisibility(View.GONE);
+        }
     }
 
     private void readStream(final int genId, InputStream inputStream, final Message msg, final boolean thinkingEnabled) throws IOException {

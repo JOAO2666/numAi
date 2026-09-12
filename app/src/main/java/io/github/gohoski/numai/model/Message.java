@@ -233,6 +233,14 @@ public class Message {
         isError = true;
     }
 
+    public boolean isError() {
+        return isError;
+    }
+
+    public void setError(boolean isError) {
+        this.isError = isError;
+    }
+
     public JSONObject toJSONObject() {
         JSONObject json = new JSONObject();
         json.put("messageId", messageId);

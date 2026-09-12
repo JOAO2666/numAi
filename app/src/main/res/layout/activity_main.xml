@@ -147,6 +147,17 @@
                 android:id="@+id/waiting"
                 android:visibility="gone"/>
 
+            <TextView
+                android:id="@+id/sending_status"
+                android:layout_width="wrap_content"
+                android:layout_height="fill_parent"
+                android:gravity="center_vertical"
+                android:textColor="@android:color/darker_gray"
+                android:textSize="11sp"
+                android:paddingLeft="4dp"
+                android:paddingRight="6dp"
+                android:visibility="gone" />
+
             <ImageButton
                 android:id="@+id/send_button"
                 android:layout_width="wrap_content"

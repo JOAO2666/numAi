@@ -122,6 +122,10 @@
     <string name="remove_attachment">Remover anexo</string>
     <string name="preview_attachment">Imagem anexada</string>
     <string name="wait_images_loading">Aguarde o carregamento das imagens...</string>
+    <string name="sending_images">Enviando imagem(ns)...</string>
+    <string name="sending_message">Enviando...</string>
+    <string name="images_delivered">Entregue ao servidor</string>
+    <string name="send_failed">Falha no envio</string>
     <string name="send_message">Enviar mensagem</string>
     <string name="stop_generation">Parar geração</string>
 </resources>

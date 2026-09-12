@@ -12,6 +12,7 @@ import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import java.io.FileInputStream;
@@ -25,6 +26,7 @@ import cc.nnproject.json.JSONArray;
 import cc.nnproject.json.JSONException;
 import cc.nnproject.json.JSONObject;
 import io.github.gohoski.numai.ChatProcessingService;
+import io.github.gohoski.numai.MainActivity;
 import io.github.gohoski.numai.R;
 import io.github.gohoski.numai.model.Message;
 import io.github.gohoski.numai.model.Role;
@@ -109,25 +111,48 @@ public class MessageAdapter extends ArrayAdapter<Message> {
             if (images != null && !images.isEmpty()) {
                 holder.sentImagesContainer.setVisibility(View.VISIBLE);
                 holder.sentImagesContainer.removeAllViews();
-                int thumbSize = (int) (64 * context.getResources().getDisplayMetrics().density + 0.5f);
-                int margin = (int) (4 * context.getResources().getDisplayMetrics().density + 0.5f);
+                LayoutInflater inflater = LayoutInflater.from(context);
+                boolean isSending = isMessageSending(message);
+                boolean isError = message.isError();
+
                 for (int i = 0; i < images.size(); i++) {
                     final String imgFile = images.get(i);
                     Bitmap thumb = decodeGeneratedImage(imgFile, 200);
                     if (thumb != null) {
-                        ImageView iv = new ImageView(context);
-                        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(thumbSize, thumbSize);
-                        lp.setMargins(margin, 0, margin, 0);
-                        iv.setLayoutParams(lp);
-                        iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                        iv.setBackgroundResource(R.drawable.attachment_thumb_bg);
+                        View itemView = inflater.inflate(R.layout.item_sent_image, holder.sentImagesContainer, false);
+                        ImageView iv = (ImageView) itemView.findViewById(R.id.sent_image_thumb);
+                        ProgressBar pb = (ProgressBar) itemView.findViewById(R.id.sent_image_loading);
+                        TextView badge = (TextView) itemView.findViewById(R.id.sent_image_badge);
+
                         iv.setImageBitmap(thumb);
-                        iv.setOnClickListener(new View.OnClickListener() {
+                        itemView.setOnClickListener(new View.OnClickListener() {
                             public void onClick(View view) {
                                 showGeneratedImage(imgFile);
                             }
                         });
-                        holder.sentImagesContainer.addView(iv);
+
+                        if (isSending) {
+                            if (pb != null) pb.setVisibility(View.VISIBLE);
+                            if (badge != null) badge.setVisibility(View.GONE);
+                        } else if (isError) {
+                            if (pb != null) pb.setVisibility(View.GONE);
+                            if (badge != null) {
+                                badge.setVisibility(View.VISIBLE);
+                                badge.setBackgroundResource(R.drawable.sent_status_error_bg);
+                                badge.setText("!");
+                                badge.setContentDescription(context.getString(R.string.send_failed));
+                            }
+                        } else {
+                            if (pb != null) pb.setVisibility(View.GONE);
+                            if (badge != null) {
+                                badge.setVisibility(View.VISIBLE);
+                                badge.setBackgroundResource(R.drawable.sent_status_delivered_bg);
+                                badge.setText("✓");
+                                badge.setContentDescription(context.getString(R.string.images_delivered));
+                            }
+                        }
+
+                        holder.sentImagesContainer.addView(itemView);
                     }
                 }
             } else {
@@ -405,5 +430,20 @@ public class MessageAdapter extends ArrayAdapter<Message> {
                 .setView(view)
                 .setPositiveButton(android.R.string.ok, null)
                 .show();
+    }
+
+    private boolean isMessageSending(Message message) {
+        if (message == null) return false;
+        String chatId = message.getChatId();
+        String genId = message.getGenerationId();
+        if (chatId != null && genId != null) {
+            if (ChatProcessingService.isGenerationActive(chatId, genId)) {
+                return true;
+            }
+        }
+        if (context instanceof MainActivity) {
+            return ((MainActivity) context).isMessageSending(message);
+        }
+        return false;
     }
 }

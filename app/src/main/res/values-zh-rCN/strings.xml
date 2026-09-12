@@ -99,6 +99,10 @@
     <string name="remove_attachment">移除附件</string>
     <string name="preview_attachment">已附加图片</string>
     <string name="wait_images_loading">请等待图片加载完成...</string>
+    <string name="sending_images">正在发送图片...</string>
+    <string name="sending_message">正在发送...</string>
+    <string name="images_delivered">已送达服务器</string>
+    <string name="send_failed">发送失败</string>
     <string name="send_message">发送消息</string>
     <string name="stop_generation">停止生成</string>
 </resources>

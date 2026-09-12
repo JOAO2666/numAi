@@ -231,8 +231,11 @@ public class ChatProcessingService extends Service {
                             assistant.setContent(error.getMessage());
                             assistant.setAsError();
                             Chat chat = chatManager.getChatById(generation.getChatId());
-                            if (chat != null) chatManager.onMessageAdded(
-                                    ChatProcessingService.this, chat);
+                            if (chat != null) {
+                                markUserMessageError(chat, generation.getMessageId());
+                                chatManager.onMessageAdded(
+                                        ChatProcessingService.this, chat);
+                            }
                         }
                         finish(generation);
                     }
@@ -289,7 +292,12 @@ public class ChatProcessingService extends Service {
                 assistant.setAsError();
             }
             Chat currentChat = chatManager.getChatById(generation.getChatId());
-            if (currentChat != null) chatManager.onMessageAdded(this, currentChat);
+            if (currentChat != null) {
+                if (assistant.isError()) {
+                    markUserMessageError(currentChat, generation.getMessageId());
+                }
+                chatManager.onMessageAdded(this, currentChat);
+            }
             if (!generation.isCancelled() && !streamToolCalls.isEmpty()) {
                 handedOffToNextRequest = executeToolCalls(intent, generation, chat, assistant, streamToolCalls,
                         thinkingEnabled, generationContext, toolRound);
@@ -301,7 +309,10 @@ public class ChatProcessingService extends Service {
                         getString(R.string.error) : error.getMessage());
                 assistant.setAsError();
                 Chat currentChat = chatManager.getChatById(generation.getChatId());
-                if (currentChat != null) chatManager.onMessageAdded(this, currentChat);
+                if (currentChat != null) {
+                    markUserMessageError(currentChat, generation.getMessageId());
+                    chatManager.onMessageAdded(this, currentChat);
+                }
             }
         } finally {
             if (reader != null) {
@@ -367,6 +378,7 @@ public class ChatProcessingService extends Service {
             if (assistant.getContent() == null || assistant.getContent().trim().length() == 0) {
                 assistant.setContent(getString(R.string.error));
                 assistant.setAsError();
+                markUserMessageError(chat, generation.getMessageId());
                 chatManager.onMessageAdded(this, chat);
             }
             finish(generation);
@@ -426,7 +438,22 @@ public class ChatProcessingService extends Service {
         message.setChatId(chat.getId());
         message.setGenerationId(generation.getGenerationId());
         chat.getMessages().add(message);
+        markUserMessageError(chat, generation.getMessageId());
         chatManager.onMessageAdded(this, chat);
+    }
+
+    private void markUserMessageError(Chat chat, String messageId) {
+        if (chat == null || chat.getMessages() == null) return;
+        List<Message> list = chat.getMessages();
+        for (int i = list.size() - 1; i >= 0; i--) {
+            Message m = list.get(i);
+            if (m != null && m.isSent()) {
+                if (messageId == null || messageId.equals(m.getMessageId())) {
+                    m.setAsError();
+                    break;
+                }
+            }
+        }
     }
 
     private String executeSearch(SearchEngine engine, StreamToolCall call) {
