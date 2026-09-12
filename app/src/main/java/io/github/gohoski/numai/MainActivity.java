@@ -28,6 +28,7 @@ import android.view.ViewGroup;
 import android.widget.AbsListView;
 import android.widget.AdapterView;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -39,6 +40,7 @@ import android.widget.Toast;
 import android.widget.ToggleButton;
 
 import java.io.BufferedReader;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -104,6 +106,9 @@ public class MainActivity extends Activity {
     int UPDATE_DELAY_MS = 250;
 
     private ImageButton attachBtn;
+    private FrameLayout previewWrapper;
+    private LinearLayout previewContainer;
+    private int pendingImageLoads = 0;
     private final Object bufferLock = new Object();
     private final StringBuilder thinkBuffer = new StringBuilder();
     private final StringBuilder contentBuffer = new StringBuilder();
@@ -148,6 +153,24 @@ public class MainActivity extends Activity {
         input = (EditText) findViewById(R.id.message_input);
         sendBtn = (ImageButton) findViewById(R.id.send_button);
         attachBtn = (ImageButton) findViewById(R.id.attach_button);
+        previewWrapper = (FrameLayout) findViewById(R.id.attachment_preview_wrapper);
+        if (previewWrapper != null) {
+            previewContainer = new LinearLayout(this);
+            previewContainer.setOrientation(LinearLayout.HORIZONTAL);
+            previewContainer.setGravity(Gravity.CENTER_VERTICAL);
+            if (Integer.parseInt(Build.VERSION.SDK) >= 3) {
+                android.widget.HorizontalScrollView hsv = new android.widget.HorizontalScrollView(this);
+                hsv.setLayoutParams(new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                hsv.setHorizontalScrollBarEnabled(false);
+                hsv.addView(previewContainer, new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                previewWrapper.addView(hsv);
+            } else {
+                previewWrapper.addView(previewContainer, new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            }
+        }
         thinkingToggle = (ToggleButton) findViewById(R.id.thinking);
         imageToggle = (ToggleButton) findViewById(R.id.image_generation);
         progressBar = (ProgressBar) findViewById(R.id.waiting);
@@ -544,9 +567,93 @@ public class MainActivity extends Activity {
             }
         }
         inputImages.clear();
+        if (previewContainer != null) {
+            for (int i = 0; i < previewContainer.getChildCount(); i++) {
+                View child = previewContainer.getChildAt(i);
+                if (child != null) {
+                    Object tag = child.getTag();
+                    if (tag instanceof boolean[]) {
+                        ((boolean[]) tag)[0] = true;
+                    }
+                    ImageView iv = (ImageView) child.findViewById(R.id.preview_image);
+                    if (iv != null) iv.setImageDrawable(null);
+                }
+            }
+            previewContainer.removeAllViews();
+        }
+        if (previewWrapper != null) {
+            previewWrapper.setVisibility(View.GONE);
+        }
         if (imgCount != null) {
             imgCount.setText("0");
             imgCount.setVisibility(View.GONE);
+        }
+    }
+
+    private void removeAttachment(View previewItem, String fileName, boolean[] isCancelled) {
+        if (isCancelled != null) {
+            isCancelled[0] = true;
+        }
+        if (fileName != null) {
+            deleteFile(fileName);
+            inputImages.remove(fileName);
+        }
+        if (previewItem != null && previewContainer != null) {
+            ImageView iv = (ImageView) previewItem.findViewById(R.id.preview_image);
+            if (iv != null) iv.setImageDrawable(null);
+            previewContainer.removeView(previewItem);
+            if (previewContainer.getChildCount() == 0 && previewWrapper != null) {
+                previewWrapper.setVisibility(View.GONE);
+            }
+        }
+        if (imgCount != null) {
+            if (inputImages.isEmpty()) {
+                imgCount.setText("0");
+                imgCount.setVisibility(View.GONE);
+            } else {
+                imgCount.setText(String.valueOf(inputImages.size()));
+                imgCount.setVisibility(View.VISIBLE);
+            }
+        }
+    }
+
+    private void showImagePreviewDialog(String fileName) {
+        Bitmap bitmap = decodeSampledBitmapFromFile(this, fileName, 1200, 1200);
+        if (bitmap == null) return;
+        ImageView view = new ImageView(this);
+        view.setImageBitmap(bitmap);
+        view.setAdjustViewBounds(true);
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.preview_attachment)
+                .setView(view)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
+    }
+
+    public static Bitmap decodeSampledBitmapFromFile(Context ctx, String fileName, int reqW, int reqH) {
+        FileInputStream fis = null;
+        try {
+            fis = ctx.openFileInput(fileName);
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inJustDecodeBounds = true;
+            BitmapFactory.decodeStream(fis, null, options);
+            fis.close();
+            fis = null;
+
+            options.inSampleSize = calculateInSampleSize(options, reqW, reqH);
+            options.inJustDecodeBounds = false;
+
+            fis = ctx.openFileInput(fileName);
+            Bitmap bmp = BitmapFactory.decodeStream(fis, null, options);
+            fis.close();
+            fis = null;
+            return bmp;
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (fis != null) {
+                try { fis.close(); } catch (IOException ignored) {}
+            }
         }
     }
 
@@ -574,33 +681,123 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void processSelectedImage(Uri uri) {
-        String fileName = "img_" + nextImageId++ + ".jpg";
-        FileOutputStream fos = null;
-        boolean success = false;
-        try {
-            Bitmap bitmap = decodeSampledBitmap(this, uri, 1080, 1080);
-            if (bitmap != null) {
-                fos = openFileOutput(fileName, Context.MODE_PRIVATE);
-                success = bitmap.compress(Bitmap.CompressFormat.JPEG, 75, fos);
-                bitmap.recycle();
+    private void processSelectedImage(final Uri uri) {
+        if (uri == null) return;
+        final String fileName = "img_" + (nextImageId++) + ".jpg";
+        final boolean[] isCancelled = new boolean[]{false};
+
+        final View previewItem;
+        if (previewContainer != null) {
+            previewItem = getLayoutInflater().inflate(R.layout.item_attachment_preview, previewContainer, false);
+            previewItem.setTag(isCancelled);
+            final ImageView previewImage = (ImageView) previewItem.findViewById(R.id.preview_image);
+            final ProgressBar previewLoading = (ProgressBar) previewItem.findViewById(R.id.preview_loading);
+            final View previewRemove = previewItem.findViewById(R.id.preview_remove);
+
+            previewLoading.setVisibility(View.VISIBLE);
+            previewImage.setVisibility(View.INVISIBLE);
+
+            previewRemove.setOnClickListener(new OnClickListener() {
+                public void onClick(View v) {
+                    removeAttachment(previewItem, fileName, isCancelled);
+                }
+            });
+
+            previewContainer.addView(previewItem);
+            if (previewWrapper != null) {
+                previewWrapper.setVisibility(View.VISIBLE);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            if (fos != null) {
-                try { fos.close(); } catch (IOException ignored) {}
-            }
+        } else {
+            previewItem = null;
         }
 
-        if (success) {
-            inputImages.add(fileName);
-            imgCount.setVisibility(View.VISIBLE);
-            imgCount.setText(String.valueOf(inputImages.size()));
-        } else {
-            deleteFile(fileName);
-            Toast.makeText(this, R.string.space_fail, Toast.LENGTH_SHORT).show();
-        }
+        pendingImageLoads++;
+
+        new Thread(new Runnable() {
+            public void run() {
+                FileOutputStream fos = null;
+                boolean success = false;
+                Bitmap thumbBitmap = null;
+                try {
+                    Bitmap bitmap = decodeSampledBitmap(MainActivity.this, uri, 1080, 1080);
+                    if (bitmap != null && !isCancelled[0]) {
+                        fos = openFileOutput(fileName, Context.MODE_PRIVATE);
+                        success = bitmap.compress(Bitmap.CompressFormat.JPEG, 75, fos);
+
+                        if (success && !isCancelled[0]) {
+                            int w = bitmap.getWidth();
+                            int h = bitmap.getHeight();
+                            int maxDim = 128;
+                            int targetW = maxDim;
+                            int targetH = maxDim;
+                            if (w > 0 && h > 0) {
+                                if (w > h) {
+                                    targetW = maxDim;
+                                    targetH = Math.max(1, (h * maxDim) / w);
+                                } else {
+                                    targetH = maxDim;
+                                    targetW = Math.max(1, (w * maxDim) / h);
+                                }
+                            }
+                            thumbBitmap = Bitmap.createScaledBitmap(bitmap, targetW, targetH, true);
+                        }
+                        bitmap.recycle();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    success = false;
+                } finally {
+                    if (fos != null) {
+                        try { fos.close(); } catch (IOException ignored) {}
+                    }
+                }
+
+                final boolean finalSuccess = success;
+                final Bitmap finalThumb = thumbBitmap;
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        pendingImageLoads--;
+                        if (isFinishing() || isCancelled[0]) {
+                            deleteFile(fileName);
+                            if (finalThumb != null) finalThumb.recycle();
+                            return;
+                        }
+
+                        if (finalSuccess && finalThumb != null) {
+                            inputImages.add(fileName);
+                            if (imgCount != null) {
+                                imgCount.setVisibility(View.VISIBLE);
+                                imgCount.setText(String.valueOf(inputImages.size()));
+                            }
+                            if (previewItem != null) {
+                                ImageView previewImage = (ImageView) previewItem.findViewById(R.id.preview_image);
+                                ProgressBar previewLoading = (ProgressBar) previewItem.findViewById(R.id.preview_loading);
+                                if (previewLoading != null) previewLoading.setVisibility(View.GONE);
+                                if (previewImage != null) {
+                                    previewImage.setVisibility(View.VISIBLE);
+                                    previewImage.setImageBitmap(finalThumb);
+                                    previewImage.setOnClickListener(new OnClickListener() {
+                                        public void onClick(View v) {
+                                            showImagePreviewDialog(fileName);
+                                        }
+                                    });
+                                }
+                            }
+                        } else {
+                            deleteFile(fileName);
+                            if (finalThumb != null) finalThumb.recycle();
+                            if (previewItem != null && previewContainer != null) {
+                                previewContainer.removeView(previewItem);
+                                if (previewContainer.getChildCount() == 0 && previewWrapper != null) {
+                                    previewWrapper.setVisibility(View.GONE);
+                                }
+                            }
+                            Toast.makeText(MainActivity.this, R.string.space_fail, Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
+            }
+        }).start();
     }
 
     private void scrollToBottom() {
@@ -666,6 +863,10 @@ public class MainActivity extends Activity {
     }
 
     private void sendMessage() {
+        if (pendingImageLoads > 0) {
+            Toast.makeText(this, R.string.wait_images_loading, Toast.LENGTH_SHORT).show();
+            return;
+        }
         String text = input.getText().toString().trim();
         final boolean generateImage = imageToggle != null && imageToggle.isChecked();
         if (generateImage && text.length() == 0) {
@@ -690,6 +891,12 @@ public class MainActivity extends Activity {
         progressBar.setVisibility(View.VISIBLE);
         inputImages.clear();
         imgCount.setVisibility(View.GONE);
+        if (previewContainer != null) {
+            previewContainer.removeAllViews();
+        }
+        if (previewWrapper != null) {
+            previewWrapper.setVisibility(View.GONE);
+        }
         adapter.notifyDataSetChanged();
         updateEmptyState();
         scrollToBottom();

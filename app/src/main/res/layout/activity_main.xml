@@ -54,6 +54,16 @@
         android:orientation="vertical"
         android:id="@+id/input_layout">
 
+        <FrameLayout
+            android:id="@+id/attachment_preview_wrapper"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="2dp"
+            android:visibility="gone" />
+
         <EditText
             android:id="@+id/message_input"
             android:layout_width="fill_parent"

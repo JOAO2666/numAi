@@ -97,6 +97,9 @@
     <string name="attach_image">Görsel ekle</string>
     <string name="clear_attachments">Ekli görselleri temizle</string>
     <string name="attachments_cleared">Ekli görseller temizlendi</string>
+    <string name="remove_attachment">Eki kaldır</string>
+    <string name="preview_attachment">Ekli görsel</string>
+    <string name="wait_images_loading">Lütfen görsellerin yüklenmesini bekleyin...</string>
     <string name="send_message">Mesaj gönder</string>
     <string name="stop_generation">Oluşturmayı durdur</string>
 </resources>

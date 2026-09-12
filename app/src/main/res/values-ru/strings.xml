@@ -99,6 +99,9 @@
     <string name="attach_image">Прикрепить изображение</string>
     <string name="clear_attachments">Очистить прикреплённые изображения</string>
     <string name="attachments_cleared">Прикреплённые изображения удалены</string>
+    <string name="remove_attachment">Удалить вложение</string>
+    <string name="preview_attachment">Прикрепленное изображение</string>
+    <string name="wait_images_loading">Пожалуйста, дождитесь загрузки изображений...</string>
     <string name="send_message">Отправить сообщение</string>
     <string name="stop_generation">Остановить генерацию</string>
 </resources>

@@ -119,6 +119,9 @@
     <string name="attach_image">Anexar imagem</string>
     <string name="clear_attachments">Limpar imagens anexadas</string>
     <string name="attachments_cleared">Imagens anexadas removidas</string>
+    <string name="remove_attachment">Remover anexo</string>
+    <string name="preview_attachment">Imagem anexada</string>
+    <string name="wait_images_loading">Aguarde o carregamento das imagens...</string>
     <string name="send_message">Enviar mensagem</string>
     <string name="stop_generation">Parar geração</string>
 </resources>

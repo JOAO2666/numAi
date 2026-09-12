@@ -118,6 +118,9 @@
     <string name="attach_image">Attach image</string>
     <string name="clear_attachments">Clear attached images</string>
     <string name="attachments_cleared">Attached images cleared</string>
+    <string name="remove_attachment">Remove attachment</string>
+    <string name="preview_attachment">Attached image</string>
+    <string name="wait_images_loading">Please wait for images to finish loading...</string>
     <string name="send_message">Send message</string>
     <string name="stop_generation">Stop generation</string>
 </resources>

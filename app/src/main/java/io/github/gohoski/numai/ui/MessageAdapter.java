@@ -10,6 +10,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -97,13 +98,54 @@ public class MessageAdapter extends ArrayAdapter<Message> {
 
             holder = new SentViewHolder();
             holder.messageText = (TextView) convertView.findViewById(R.id.message_text);
+            holder.sentImagesContainer = (LinearLayout) convertView.findViewById(R.id.sent_images_container);
             convertView.setTag(holder);
         } else {
             holder = (SentViewHolder) convertView.getTag();
         }
 
         List<String> images = message.getInputImages();
-        holder.messageText.setText(message.getContent() + (images == null || images.isEmpty() ? "" : String.format("\n " + context.getString(R.string.img_count), String.valueOf(images.size()))));
+        if (holder.sentImagesContainer != null) {
+            if (images != null && !images.isEmpty()) {
+                holder.sentImagesContainer.setVisibility(View.VISIBLE);
+                holder.sentImagesContainer.removeAllViews();
+                int thumbSize = (int) (64 * context.getResources().getDisplayMetrics().density + 0.5f);
+                int margin = (int) (4 * context.getResources().getDisplayMetrics().density + 0.5f);
+                for (int i = 0; i < images.size(); i++) {
+                    final String imgFile = images.get(i);
+                    Bitmap thumb = decodeGeneratedImage(imgFile, 200);
+                    if (thumb != null) {
+                        ImageView iv = new ImageView(context);
+                        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(thumbSize, thumbSize);
+                        lp.setMargins(margin, 0, margin, 0);
+                        iv.setLayoutParams(lp);
+                        iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                        iv.setBackgroundResource(R.drawable.attachment_thumb_bg);
+                        iv.setImageBitmap(thumb);
+                        iv.setOnClickListener(new View.OnClickListener() {
+                            public void onClick(View view) {
+                                showGeneratedImage(imgFile);
+                            }
+                        });
+                        holder.sentImagesContainer.addView(iv);
+                    }
+                }
+            } else {
+                holder.sentImagesContainer.setVisibility(View.GONE);
+                holder.sentImagesContainer.removeAllViews();
+            }
+        }
+
+        String content = message.getContent();
+        if (content != null && content.length() > 0) {
+            holder.messageText.setVisibility(View.VISIBLE);
+            holder.messageText.setText(content);
+        } else if (images != null && !images.isEmpty()) {
+            holder.messageText.setVisibility(View.GONE);
+        } else {
+            holder.messageText.setVisibility(View.VISIBLE);
+            holder.messageText.setText("");
+        }
 
         return convertView;
     }
@@ -304,6 +346,7 @@ public class MessageAdapter extends ArrayAdapter<Message> {
 
     private static class SentViewHolder {
         TextView messageText;
+        LinearLayout sentImagesContainer;
     }
 
     private static class ReceivedViewHolder {
